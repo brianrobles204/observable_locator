@@ -8,48 +8,70 @@ import 'package:test/test.dart';
 import 'test_utils.dart';
 
 void main() {
-  late WritableObservableLocator locator;
+  late ObservableLocator locator;
+  var isDisposed = false;
 
   setUp(() {
-    locator = ObservableLocator.writable();
+    isDisposed = false;
   });
 
+  void disposeLocator() {
+    if (!isDisposed) {
+      isDisposed = true;
+      locator.dispose();
+    }
+  }
+
   tearDown(() {
-    locator.dispose();
+    disposeLocator();
   });
 
   group('registering computed values', () {
     test('works as expected', () {
-      locator.register<int>((_) => 100);
+      locator = ObservableLocator([
+        Binder<int>((_) => 100),
+      ]);
 
       expect(locator.observe<int>(), equals(100));
     });
 
     test('throws if type is not registered', () {
+      locator = ObservableLocator([]);
+
       expect(
         () => locator.observe<String>(),
-        throwsA(isA<LocatorTypeNotRegisteredException>()),
+        throwsA(isA<LocatorKeyNotFoundException>()),
       );
       expect(locator.tryObserve<String>(), isNull);
     });
     test('throws if registering same type multiple times', () {
-      locator.register<int>((_) => 100);
       expect(
-        () => locator.register<int>((_) => 200),
+        () => locator = ObservableLocator([
+          Binder<int>((_) => 100),
+          Binder<int>((_) => 200),
+        ]),
         throwsA(isA<LocatorValueAlreadyRegisteredException>()),
       );
+
+      isDisposed = true; // locator never set
     });
     test('throws if registering dynamic type', () {
       expect(
-        () => locator.register<dynamic>((dynamic _) => 100),
+        () => locator = ObservableLocator([
+          Binder<dynamic>((_) => 100),
+        ]),
         throwsA(isA<AssertionError>()),
       );
+
+      isDisposed = true; // locator never set
     });
 
     test('updates reactions when observed', () {
       final observable = Observable('first');
 
-      locator.register((_) => observable.value);
+      locator = ObservableLocator([
+        Binder<String>((_) => observable.value),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -67,8 +89,10 @@ void main() {
     test('transitively updates reactions', () {
       final observable = Observable(100);
 
-      locator.register<int>((_) => observable.value);
-      locator.register<String>((_) => locator.observe<int>().toString());
+      locator = ObservableLocator([
+        Binder<int>((_) => observable.value),
+        Binder<String>((_) => locator.observe<int>().toString()),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -84,7 +108,9 @@ void main() {
     });
 
     test('handles errors while registering', () {
-      locator.register<String>((_) => throw FormatException());
+      locator = ObservableLocator([
+        Binder<String>((_) => throw FormatException()),
+      ]);
 
       expect(
         () => locator.observe<String>(),
@@ -98,11 +124,13 @@ void main() {
     });
 
     test('transitively handles error when type isn\'t registered', () {
-      locator.register<String>((_) => locator.observe<double>().toString());
+      locator = ObservableLocator([
+        Binder<String>((_) => locator.observe<double>().toString()),
+      ]);
 
       expect(
         () => locator.observe<String>(),
-        throwsA(isA<LocatorTypeNotRegisteredException>()),
+        throwsA(isA<LocatorKeyNotFoundException>()),
       );
 
       expect(
@@ -112,8 +140,10 @@ void main() {
     });
 
     test('transitively handles errors while registering', () {
-      locator.register<double>((_) => throw FormatException());
-      locator.register<String>((_) => locator.observe<double>().toString());
+      locator = ObservableLocator([
+        Binder<double>((_) => throw FormatException()),
+        Binder<String>((_) => locator.observe<double>().toString()),
+      ]);
 
       expect(
         () => locator.observe<String>(),
@@ -129,9 +159,11 @@ void main() {
     test('can switch between errors and values', () {
       final shouldThrow = Observable(false);
 
-      locator.register<String>(
-        (_) => shouldThrow.value ? throw FormatException() : 'working',
-      );
+      locator = ObservableLocator([
+        Binder<String>(
+          (_) => shouldThrow.value ? throw FormatException() : 'working',
+        ),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -153,20 +185,20 @@ void main() {
       var doubleCount = 0;
       var stringCount = 0;
 
-      locator.register<double>((_) {
-        doubleCount++;
-        return x.value.toDouble() + y.value.toDouble();
-      });
+      locator = ObservableLocator([
+        Binder<double>((_) {
+          doubleCount++;
+          return x.value.toDouble() + y.value.toDouble();
+        }),
+        Binder<int>((_) => z.value),
+        Binder<String>((_) {
+          stringCount++;
 
-      locator.register<int>((_) => z.value);
-
-      locator.register<String>((_) {
-        stringCount++;
-
-        final doubleValue = locator.observe<double>();
-        final intValue = locator.observe<int>();
-        return (doubleValue + intValue).toString();
-      });
+          final doubleValue = locator.observe<double>();
+          final intValue = locator.observe<int>();
+          return (doubleValue + intValue).toString();
+        }),
+      ]);
 
       final disposeObserveString = autorun((_) {
         locator.observe<String>();
@@ -197,17 +229,17 @@ void main() {
     });
 
     test('disposes correctly', () {
-      final testLocator = ObservableLocator.writable();
-
       final firstDisposable = _Disposable();
       final observable = Observable(firstDisposable);
 
-      testLocator.register<_Disposable>(
-        (_) => observable.value,
-        dispose: (disposable) => disposable.dispose(),
-      );
+      locator = ObservableLocator([
+        Binder<_Disposable>(
+          (_) => observable.value,
+          dispose: (disposable) => disposable.dispose(),
+        ),
+      ]);
 
-      final disposeObserve = autorun((_) => testLocator.observe<_Disposable>());
+      final disposeObserve = autorun((_) => locator.observe<_Disposable>());
 
       expect(firstDisposable.disposeCount, equals(0),
           reason: 'first shouldn\'t be disposed yet');
@@ -221,7 +253,7 @@ void main() {
           reason: 'second shouldn\'t be disposed yet');
 
       disposeObserve();
-      testLocator.dispose();
+      disposeLocator();
 
       expect(firstDisposable.disposeCount, equals(1),
           reason: 'first should still be disposed');
@@ -229,21 +261,21 @@ void main() {
           reason: 'second should be disposed');
     });
     test('only disposes if values are different', () {
-      final testLocator = ObservableLocator.writable();
-
       final firstDisposable = _Disposable('x');
       final observable = Observable(firstDisposable);
 
-      testLocator.register<_Disposable>(
-        (_) => observable.value,
-        equals: (a, b) => a?.name == b?.name,
-        dispose: (disposable) => disposable.dispose(),
-      );
+      locator = ObservableLocator([
+        Binder<_Disposable>(
+          (_) => observable.value,
+          equals: (a, b) => a?.name == b?.name,
+          dispose: (disposable) => disposable.dispose(),
+        ),
+      ]);
 
-      final disposeObserve = autorun((_) => testLocator.observe<_Disposable>());
+      final disposeObserve = autorun((_) => locator.observe<_Disposable>());
 
       expect(firstDisposable.disposeCount, equals(0));
-      expect(testLocator.observe<_Disposable>(), equals(firstDisposable));
+      expect(locator.observe<_Disposable>(), equals(firstDisposable));
 
       final secondDisposable = _Disposable('x');
       observable.setSingle(secondDisposable);
@@ -251,7 +283,7 @@ void main() {
       // should still be the first disposable
       expect(firstDisposable.disposeCount, equals(0));
       expect(secondDisposable.disposeCount, equals(0));
-      expect(testLocator.observe<_Disposable>(), equals(firstDisposable));
+      expect(locator.observe<_Disposable>(), equals(firstDisposable));
 
       final thirdDisposable = _Disposable('y');
       observable.setSingle(thirdDisposable);
@@ -260,22 +292,49 @@ void main() {
       expect(firstDisposable.disposeCount, equals(1));
       expect(secondDisposable.disposeCount, equals(0));
       expect(thirdDisposable.disposeCount, equals(0));
-      expect(testLocator.observe<_Disposable>(), equals(thirdDisposable));
+      expect(locator.observe<_Disposable>(), equals(thirdDisposable));
 
       disposeObserve();
-      testLocator.dispose();
+      disposeLocator();
 
       expect(firstDisposable.disposeCount, equals(1));
       expect(secondDisposable.disposeCount, equals(0));
       expect(thirdDisposable.disposeCount, equals(1));
     });
+    test('uses equals to determine whether to update', () {
+      final observable = Observable('apple');
+
+      locator = ObservableLocator([
+        Binder<String>(
+          (_) => observable.value,
+          equals: (a, b) => a?.codeUnitAt(0) == b?.codeUnitAt(0),
+        ),
+      ]);
+
+      expectObservableValue<String>(
+        locator.observe,
+        emitsInOrder(<dynamic>[
+          equals('apple'),
+          equals('banana'),
+          equals('cherry'),
+        ]),
+      );
+
+      observable.setSingle('avocado');
+      observable.setSingle('banana');
+      observable.setSingle('blueberry');
+      observable.setSingle('cherry');
+    });
     test('old values are passed to register callback', () async {
       final description = Observable('first');
       final cancelObservation = Completer<void>();
-      locator.register<_Disposable>(
-        (value) => (value ??= _Disposable())..description = description.value,
-        dispose: (disposable) => disposable.dispose(),
-      );
+
+      locator = ObservableLocator([
+        Binder<_Disposable>(
+          (value) => (value ??= _Disposable())..description = description.value,
+          dispose: (disposable) => disposable.dispose(),
+        ),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<_Disposable>(
@@ -299,10 +358,13 @@ void main() {
     });
     test('catches errors', () {
       final shouldThrow = Observable(false);
-      locator.register<int>(
-        (_) => shouldThrow.value ? throw FormatException() : 100,
-        catchError: (e) => -1,
-      );
+
+      locator = ObservableLocator([
+        Binder<int>(
+          (_) => shouldThrow.value ? throw FormatException() : 100,
+          catchError: (e) => -1,
+        ),
+      ]);
 
       expectObservableValue<int>(
         locator.observe,
@@ -319,12 +381,14 @@ void main() {
   });
   group('observing values', () {
     test('handles nullable types', () {
-      locator.register<String?>((_) => 'test');
-      locator.register<int?>((_) => null);
+      locator = ObservableLocator([
+        Binder<String?>((_) => 'test'),
+        Binder<int?>((_) => null),
+      ]);
 
       expect(
         () => locator.observe<String>(),
-        throwsA(isA<LocatorTypeNotRegisteredException>()),
+        throwsA(isA<LocatorKeyNotFoundException>()),
       );
 
       expect(locator.observe<String?>(), equals('test'));
@@ -336,18 +400,20 @@ void main() {
       final cancelObservation = Completer<void>();
       var count = 0;
 
-      locator.registerFuture<_Box<String?>>((_, __) async {
-        final result = await completer.future;
-        count++;
-        return _Box(result);
-      });
-      locator.register<_Disposable>(
-        (_) {
-          final nameBox = locator.observe<_Box<String?>>();
-          return _Disposable(nameBox.value);
-        },
-      );
-      locator.register<String?>((_) => locator.tryObserve<_Disposable>()?.name);
+      locator = ObservableLocator([
+        FutureBinder<_Box<String?>>((_, __) async {
+          final result = await completer.future;
+          count++;
+          return _Box(result);
+        }),
+        Binder<_Disposable>(
+          (_) {
+            final nameBox = locator.observe<_Box<String?>>();
+            return _Disposable(nameBox.value);
+          },
+        ),
+        Binder<String?>((_) => locator.tryObserve<_Disposable>()?.name),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<String?>(
@@ -369,32 +435,33 @@ void main() {
       cancelObservation.complete();
     });
     test('handles unregistered types', () async {
+      locator = ObservableLocator([]);
       final cancelObservation = Completer<void>();
 
       // ignore: unawaited_futures
       expectObservableValue<String>(
         locator.observe,
         emitsInOrder(<dynamic>[
-          emitsError(isA<LocatorTypeNotRegisteredException>()),
+          emitsError(isA<LocatorKeyNotFoundException>()),
           emitsDone,
         ]),
         cancelObservation: cancelObservation.future,
       );
 
-      final tryObserve = expectObservableValue(
+      // ignore: unawaited_futures
+      expectObservableValue(
         () => locator.tryObserve<String>(),
         emitsInOrder(<dynamic>[
           isNull,
-          equals('working'),
+          emitsDone,
         ]),
+        cancelObservation: cancelObservation.future,
       );
 
-      locator.register<String>((_) => 'working');
-
-      await tryObserve;
       cancelObservation.complete();
     });
     test('throws if observing dynamic type', () async {
+      locator = ObservableLocator([]);
       expect(
         () => locator.observe<dynamic>(),
         throwsA(isA<AssertionError>()),
@@ -408,7 +475,10 @@ void main() {
   group('registering futures', () {
     test('works as expected', () {
       final completer = Completer<String>();
-      locator.registerFuture<String>((_, __) => completer.future);
+
+      locator = ObservableLocator([
+        FutureBinder<String>((_, __) => completer.future),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -422,7 +492,10 @@ void main() {
     });
     test('tryObserve works as expected', () {
       final completer = Completer<String>();
-      locator.registerFuture<String>((_, __) => completer.future);
+
+      locator = ObservableLocator([
+        FutureBinder<String>((_, __) => completer.future),
+      ]);
 
       expectObservableValue(
         () => locator.tryObserve<String>(),
@@ -439,11 +512,13 @@ void main() {
       final multiplier = Observable(5);
       final continueStream = StreamController<void>.broadcast();
 
-      locator.registerFuture<int>((_, __) async {
-        final baseValue = base.value;
-        await continueStream.stream.first;
-        return baseValue * multiplier.value;
-      });
+      locator = ObservableLocator([
+        FutureBinder<int>((_, __) async {
+          final baseValue = base.value;
+          await continueStream.stream.first;
+          return baseValue * multiplier.value;
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<int>(
@@ -478,11 +553,13 @@ void main() {
       final multiplier = Observable(5);
       final continueStream = StreamController<void>.broadcast();
 
-      locator.registerFuture<int>((_, __) async {
-        final baseValue = base.value;
-        await continueStream.stream.first;
-        return baseValue * multiplier.value;
-      });
+      locator = ObservableLocator([
+        FutureBinder<int>((_, __) async {
+          final baseValue = base.value;
+          await continueStream.stream.first;
+          return baseValue * multiplier.value;
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<int>(
@@ -506,14 +583,16 @@ void main() {
       final observable = Observable(1);
       final awaitStream = StreamController<void>.broadcast();
 
-      locator.registerFuture<int>(
-        (_, __) async {
-          final value = observable.value;
-          await awaitStream.stream.first;
-          return value;
-        },
-        pendingValue: -1,
-      );
+      locator = ObservableLocator([
+        FutureBinder<int>(
+          (_, __) async {
+            final value = observable.value;
+            await awaitStream.stream.first;
+            return value;
+          },
+          pendingValue: -1,
+        ),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<int>(
@@ -534,12 +613,14 @@ void main() {
       await pumpEventQueue();
     });
     test('errors while registering futures are reflected', () async {
-      locator.registerFuture<bool>((_, __) => throw FormatException());
-      locator.registerFuture<int>((_, __) async => throw FormatException());
-      locator.registerFuture<String>((_, __) async {
-        await Future.microtask(() => null);
-        throw FormatException();
-      });
+      locator = ObservableLocator([
+        FutureBinder<bool>((_, __) => throw FormatException()),
+        FutureBinder<int>((_, __) async => throw FormatException()),
+        FutureBinder<String>((_, __) async {
+          await Future.microtask(() => null);
+          throw FormatException();
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<bool>(
@@ -573,18 +654,20 @@ void main() {
       final description = Observable('first');
       final cancelObservation = Completer<void>();
 
-      locator.registerFuture<_Disposable>((value, future) {
-        final currentDescription = description.value;
+      locator = ObservableLocator([
+        FutureBinder<_Disposable>((value, future) {
+          final currentDescription = description.value;
 
-        if (value != null && future != null) {
-          value.description = currentDescription;
-          return future;
-        }
+          if (value != null && future != null) {
+            value.description = currentDescription;
+            return future;
+          }
 
-        return Future(() => null).then(
-          (_) => (value ??= _Disposable())..description = description.value,
-        );
-      });
+          return Future(() => null).then(
+            (_) => (value ??= _Disposable())..description = description.value,
+          );
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<_Disposable>(
@@ -609,11 +692,13 @@ void main() {
       expect(locator.observe<_Disposable>().description, equals('second'));
     });
     test('async values can be used transitively', () {
-      locator.registerFuture<int>((_, __) async {
-        await Future<void>(() => null);
-        return 100;
-      });
-      locator.register<String>((_) => locator.observe<int>().toString());
+      locator = ObservableLocator([
+        FutureBinder<int>((_, __) async {
+          await Future<void>(() => null);
+          return 100;
+        }),
+        Binder<String>((_) => locator.observe<int>().toString()),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -627,7 +712,10 @@ void main() {
   group('registering streams', () {
     test('works as expected', () {
       final controller = StreamController<String>();
-      locator.registerStream<String>((_, __) => controller.stream);
+
+      locator = ObservableLocator([
+        StreamBinder<String>((_, __) => controller.stream),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -643,7 +731,10 @@ void main() {
     });
     test('tryObserve works as expected', () {
       final controller = StreamController<String>();
-      locator.registerStream<String>((_, __) => controller.stream);
+
+      locator = ObservableLocator([
+        StreamBinder<String>((_, __) => controller.stream),
+      ]);
 
       expectObservableValue(
         () => locator.tryObserve<String>(),
@@ -661,13 +752,16 @@ void main() {
       final observable = Observable(0);
       final controller = StreamController<String>.broadcast();
       final cancelObservation = Completer<void>();
-      locator.registerStream<String>(
-        (_, __) {
-          observable.value;
-          return controller.stream;
-        },
-        pendingValue: 'empty',
-      );
+
+      locator = ObservableLocator([
+        StreamBinder<String>(
+          (_, __) {
+            observable.value;
+            return controller.stream;
+          },
+          pendingValue: 'empty',
+        ),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<String>(
@@ -699,10 +793,13 @@ void main() {
       final observable = Observable(0);
       final subject = BehaviorSubject.seeded('empty');
       final cancelObservation = Completer<void>();
-      locator.registerStream((_, __) {
-        observable.value;
-        return subject.stream;
-      });
+
+      locator = ObservableLocator([
+        StreamBinder<String>((_, __) {
+          observable.value;
+          return subject.stream;
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<String>(
@@ -734,8 +831,10 @@ void main() {
       final intController = StreamController<int>();
       final intStream = intController.stream.asObservable(initialValue: 0);
 
-      locator.registerStream((_, __) => stringStream);
-      locator.registerStream((_, __) => intStream);
+      locator = ObservableLocator([
+        StreamBinder<String>((_, __) => stringStream),
+        StreamBinder<int>((_, __) => intStream),
+      ]);
 
       expectObservableValue<String>(
         locator.observe,
@@ -765,12 +864,14 @@ void main() {
       final multiplier = Observable(2);
       final controller = StreamController<int>.broadcast();
 
-      locator.registerStream<int>(
-        (_, __) {
-          final value = multiplier.value;
-          return controller.stream.map((event) => event * value);
-        },
-      );
+      locator = ObservableLocator([
+        StreamBinder<int>(
+          (_, __) {
+            final value = multiplier.value;
+            return controller.stream.map((event) => event * value);
+          },
+        ),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<int>(
@@ -792,14 +893,16 @@ void main() {
       controller.add(3);
     });
     test('errors while registering futures are reflected', () async {
-      locator.registerStream<bool>((_, __) => throw FormatException());
-      locator.registerStream<int>((_, __) async* {
-        throw FormatException();
-      });
-      locator.registerStream<String>((_, __) async* {
-        await Future.microtask(() => null);
-        throw FormatException();
-      });
+      locator = ObservableLocator([
+        StreamBinder<bool>((_, __) => throw FormatException()),
+        StreamBinder<int>((_, __) async* {
+          throw FormatException();
+        }),
+        StreamBinder<String>((_, __) async* {
+          await Future.microtask(() => null);
+          throw FormatException();
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<bool>(
@@ -833,18 +936,20 @@ void main() {
       final description = Observable('first');
       final cancelObservation = Completer<void>();
 
-      locator.registerStream<_Disposable>((value, stream) {
-        final currentDescription = description.value;
+      locator = ObservableLocator([
+        StreamBinder<_Disposable>((value, stream) {
+          final currentDescription = description.value;
 
-        if (value != null && stream != null) {
-          value.description = currentDescription;
-          return stream;
-        }
+          if (value != null && stream != null) {
+            value.description = currentDescription;
+            return stream;
+          }
 
-        return Stream.value(
-          (value ??= _Disposable())..description = description.value,
-        );
-      });
+          return Stream.value(
+            (value ??= _Disposable())..description = description.value,
+          );
+        }),
+      ]);
 
       // ignore: unawaited_futures
       expectObservableValue<_Disposable>(
@@ -871,79 +976,114 @@ void main() {
   });
   group('children', () {
     test('can access parent registered values', () {
-      locator.register<String>((_) => 'value');
+      locator = ObservableLocator([
+        Binder<String>((_) => 'value'),
+      ]);
 
-      final child = locator.createChild();
+      final child = locator.createChild([]);
       expect(child.parent, equals(locator));
       expect(child.observe<String>(), equals('value'));
     });
     test('can depend on parent values', () {
-      locator.register<int>((_) => 100);
+      locator = ObservableLocator([
+        Binder<int>((_) => 100),
+      ]);
 
-      final child = locator.createChild();
-      child.register<String>((_) => child.observe<int>().toString());
+      ObservableLocator? child; // TODO api change: pass locator in callback
+      child = locator.createChild([
+        Binder<String>((_) => child!.observe<int>().toString()),
+      ]);
+
       expect(child.observe<String>(), equals('100'));
     });
     test('can override values of the parent', () {
-      locator.register<int>((_) => 100);
+      locator = ObservableLocator([
+        Binder<int>((_) => 100),
+      ]);
 
-      final child = locator.createChild();
-      child.register<int>((_) => 200);
+      final child = locator.createChild([
+        Binder<int>((_) => 200),
+      ]);
 
       expect(child.observe<int>(), equals(200));
       expect(locator.observe<int>(), equals(100));
     });
     test('values are scoped to each child', () {
-      final first = locator.createChild();
-      first.register<String>((_) => 'first');
+      locator = ObservableLocator([]);
 
-      final second = locator.createChild();
-      second.register<String>((_) => 'second');
+      final first = locator.createChild([
+        Binder<String>((_) => 'first'),
+      ]);
+
+      final second = locator.createChild([
+        Binder<String>((_) => 'second'),
+      ]);
 
       expect(first.observe<String>(), equals('first'));
       expect(second.observe<String>(), equals('second'));
     });
-    test('disposing works', () {
-      final child = locator.createChild();
-      final disposable = _Disposable();
+    test('intermediate values can be overriden in children', () {
+      locator = ObservableLocator([
+        Binder<int>((_) => 1),
+        Binder<String>((_) => locator.observe<int>().toString()),
+      ]);
 
-      child.register<_Disposable>(
-        (_) => disposable,
-        dispose: (value) => value.dispose(),
-      );
+      final child = locator.createChild([
+        Binder<int>((_) => 2),
+      ]);
+
+      expect(child.observe<String>(), equals('2'));
+    }, skip: 'TODO with changes to api'); // TODO avoid skipping
+    test('disposing works', () {
+      locator = ObservableLocator([]);
+
+      final disposable = _Disposable();
+      final child = locator.createChild([
+        Binder<_Disposable>(
+          (_) => disposable,
+          dispose: (value) => value.dispose(),
+        ),
+      ]);
+
       expect(child.observe<_Disposable>().disposeCount, equals(0));
 
       child.dispose();
       expect(disposable.disposeCount, equals(1));
     });
     test('disposing a parent will also dispose all children', () {
-      final x = locator.createChild();
+      locator = ObservableLocator([]);
+
       final xDisposable = _Disposable();
-      x.register<_Disposable>(
-        (_) => xDisposable,
-        dispose: (value) => value.dispose(),
-      );
+      final x = locator.createChild([
+        Binder<_Disposable>(
+          (_) => xDisposable,
+          dispose: (value) => value.dispose(),
+        ),
+      ]);
 
-      final x1 = x.createChild();
       final x1Disposable = _Disposable();
-      x1.register<_Disposable>(
-        (_) => x1Disposable,
-        dispose: (value) => value.dispose(),
-      );
+      final x1 = x.createChild([
+        Binder<_Disposable>(
+          (_) => x1Disposable,
+          dispose: (value) => value.dispose(),
+        ),
+      ]);
 
-      final x11 = x1.createChild();
       final x11Disposable = _Disposable();
-      x11.register<_Disposable>(
-        (_) => x11Disposable,
-        dispose: (value) => value.dispose(),
-      );
+      final x11 = x1.createChild([
+        Binder<_Disposable>(
+          (_) => x11Disposable,
+          dispose: (value) => value.dispose(),
+        ),
+      ]);
 
-      final x2 = x.createChild();
       final x2Disposable = _Disposable();
-      x2.register<_Disposable>(
-        (_) => x2Disposable,
-        dispose: (value) => value.dispose(),
-      );
+      final x2 = x.createChild([
+        Binder<_Disposable>(
+          (_) => x2Disposable,
+          dispose: (value) => value.dispose(),
+        ),
+      ]);
 
       expect(x.observe<_Disposable>().disposeCount, equals(0));
       expect(x1.observe<_Disposable>().disposeCount, equals(0));

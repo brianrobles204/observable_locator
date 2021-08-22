@@ -1,29 +1,35 @@
-class LocatorValueMissingException<T> implements Exception {
-  LocatorValueMissingException();
+class LocatorValueMissingException implements Exception {
+  LocatorValueMissingException(this.key);
+
+  final Object key;
 
   @override
   String toString() {
     return 'Observable Locator Exception: '
-        'The given type "$T" does not have a value within the locator.';
+        'The given key "$key" does not have a value within the locator.';
   }
 }
 
-class LocatorValueAlreadyRegisteredException<T> implements Exception {
-  LocatorValueAlreadyRegisteredException();
+class LocatorValueAlreadyRegisteredException implements Exception {
+  LocatorValueAlreadyRegisteredException(this.key);
+
+  final Object key;
 
   @override
   String toString() {
     return 'Observable Locator Exception: '
-        'The given type "$T" is already registered within the locator.';
+        'The given key "$key" is already registered within the locator.';
   }
 }
 
-class LocatorTypeNotRegisteredException<T> implements Exception {
-  LocatorTypeNotRegisteredException();
+class LocatorKeyNotFoundException implements Exception {
+  LocatorKeyNotFoundException(this.key);
+
+  final Object key;
 
   @override
   String toString() {
     return 'Observable Locator Error: '
-        'The given type "$T" is not registered.';
+        'The given key "$key" was not found.';
   }
 }
