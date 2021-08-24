@@ -168,7 +168,13 @@ class BinderStateImpl<T, S> implements BinderState<T> {
 
 typedef _SourceFn<V> = V Function(ObservableSource source);
 
-class _StateTracker<V> {
+/// [Computed]-like tracker for state `S` within a [BinderStateImpl].
+///
+/// Tracks observable dependencies used while creating the state, but not calls
+/// to [ObservableSource.observeKey]. The source observe calls are then tracked
+/// separately to allow sharing of states or creation of different states
+/// based on the values within the provided locator.
+class _StateTracker<S> {
   _StateTracker({
     required this.locator,
     required this.fn,
@@ -193,15 +199,16 @@ class _StateTracker<V> {
       () {
         try {
           if (_isDirty) {
-            // update due to new value from the tracker
+            // Update due to new value from the tracker
             return tracker.unwrappedValue;
           } else {
-            // update due to observables change
+            // Update due to observables change
 
-            // don't use outdated tracker value
+            // subscribe to tracker but don't use its outdated value
+            // should return the cached value without recomputation
             tracker.unwrappedValue;
 
-            // don't track to avoid unecessary updates
+            // return fresh value, but don't track to avoid unecessary updates
             return untracked(() => _trackValue());
           }
         } finally {
@@ -215,15 +222,15 @@ class _StateTracker<V> {
 
   _StateTracker.cloneFrom({
     required this.locator,
-    required _StateTracker<V> parent,
-    required BinderStateImpl<dynamic, V> parentState,
+    required _StateTracker<S> parent,
+    required BinderStateImpl<dynamic, S> parentState,
   })  : keys = Set.of(parent.keys),
         tracker = parent.tracker,
         fn = parent.fn,
         equals = parent.equals,
         _derivedFromParent = true,
         _isDirty = false {
-    V _observeOwnValue() {
+    S _observeOwnValue() {
       try {
         _derivedFromParent = false;
         return _trackValue();
@@ -263,23 +270,23 @@ class _StateTracker<V> {
 
   final ObservableLocator locator;
   final Set<Object> keys;
-  final _SourceFn<V> fn;
-  final Equals<V>? equals;
-  late final Computed<V> tracker;
+  final _SourceFn<S> fn;
+  final Equals<S>? equals;
+  late final Computed<S> tracker;
 
   int _observableHash = kEmptyHash;
   bool _derivedFromParent;
   bool _isDirty;
 
-  V get value => _value.value;
-  late final Computed<V> _value;
+  S get value => _value.value;
+  late final Computed<S> _value;
 
   late final _ProxyObservableSource _source = _ProxyObservableSource(
     locator: locator,
     onObserve: (key) => keys.add(key),
   );
 
-  V _trackValue() {
+  S _trackValue() {
     keys.clear();
     return _source.readInBatch(fn); // repopulates keys when observed
   }
