@@ -1,6 +1,6 @@
 import 'api.dart';
 
-extension ObserveTypeExtensions on ObservableLocator {
+extension ObserveTypeExtensions on ObservableSource {
   T observe<T>() {
     assert(T != dynamic, 'Tried to observe value of dynamic type');
     return observeKey(T);

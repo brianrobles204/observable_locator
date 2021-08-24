@@ -10,7 +10,7 @@ Binder<T> single<T>(
   DisposeCallback<T>? dispose,
 }) =>
     Binder(
-      (_) => fn(),
+      (_, __) => fn(),
       catchError: catchError,
       equals: equals,
       dispose: dispose,
@@ -24,7 +24,7 @@ Binder<T> singleFuture<T>(
   DisposeCallback<T>? dispose,
 }) =>
     FutureBinder(
-      (_, __) => fn(),
+      (_, __, ___) => fn(),
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -39,7 +39,7 @@ Binder<T> singleStream<T>(
   DisposeCallback<T>? dispose,
 }) =>
     StreamBinder(
-      (_, __) => fn(),
+      (_, __, ___) => fn(),
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,

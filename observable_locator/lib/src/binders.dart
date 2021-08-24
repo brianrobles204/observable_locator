@@ -7,7 +7,7 @@ typedef ErrorBuilder<T> = T Function(Object error);
 typedef Equals<T> = bool Function(T? newValue, T? oldValue);
 typedef DisposeCallback<T> = void Function(T value);
 
-typedef ValueBuilder<T> = T Function(T? oldvalue);
+typedef ValueBuilder<T> = T Function(ObservableSource locator, T? oldvalue);
 
 mixin TypeKeyMixin<T> {
   Object get key {
@@ -30,19 +30,22 @@ class ValueBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   final DisposeCallback<T>? dispose;
 
   @override
-  BinderState<T> createState() => BinderStateImpl<T, T>(
-        computedState: (currentValue, _) => fn(currentValue),
+  BinderState<T> createState(ObservableLocator locator) =>
+      BinderStateImpl<T, T>(
+        computeState: (locator, currentValue, _) => fn(locator, currentValue),
         observeFrom: (computedState) => computedState,
         disposeState: null,
         pendingValue: null,
         catchError: catchError,
         equals: equals,
         disposeValue: dispose,
+        locator: locator,
         key: key,
       );
 }
 
 typedef FutureValueBuilder<T> = Future<T> Function(
+  ObservableSource locator,
   T? oldValue,
   Future<T>? oldFuture,
 );
@@ -63,9 +66,10 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   final DisposeCallback<T>? dispose;
 
   @override
-  BinderState<T> createState() => BinderStateImpl<T, ObservableFuture<T>>(
-        computedState: (currentValue, currentState) {
-          final future = fn(currentValue, currentState);
+  BinderState<T> createState(ObservableLocator locator) =>
+      BinderStateImpl<T, ObservableFuture<T>>(
+        computeState: (locator, currentValue, currentState) {
+          final future = fn(locator, currentValue, currentState);
 
           if (future is ObservableFuture<T>) return future;
           return future.asObservable();
@@ -79,11 +83,13 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
         catchError: catchError,
         equals: equals,
         disposeValue: dispose,
+        locator: locator,
         key: key,
       );
 }
 
 typedef StreamValueBuilder<T> = Stream<T> Function(
+  ObservableSource locator,
   T? oldValue,
   Stream<T>? oldStream,
 );
@@ -104,9 +110,10 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   final DisposeCallback<T>? dispose;
 
   @override
-  BinderState<T> createState() => BinderStateImpl<T, ObservableStream<T>>(
-        computedState: (currentValue, currentState) {
-          final stream = fn(currentValue, currentState);
+  BinderState<T> createState(ObservableLocator locator) =>
+      BinderStateImpl<T, ObservableStream<T>>(
+        computeState: (locator, currentValue, currentState) {
+          final stream = fn(locator, currentValue, currentState);
 
           if (stream is ObservableStream<T>) return stream;
           return stream.asObservable();
@@ -124,6 +131,7 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
         catchError: catchError,
         equals: equals,
         disposeValue: dispose,
+        locator: locator,
         key: key,
       );
 }

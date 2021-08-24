@@ -11,13 +11,14 @@ class ObservableLocatorImpl implements ObservableLocator {
   }
 
   final Map<Object, BinderState> _states = {};
+  final Map<Object, BinderState> _parentStates = {};
 
   void _initStates(Iterable<Binder> binders) {
     for (final binder in binders) {
       if (_states.containsKey(binder.key)) {
         throw LocatorValueAlreadyRegisteredException(binder.key);
       }
-      _states[binder.key] = binder.createState();
+      _states[binder.key] = binder.createState(this);
     }
   }
 
@@ -34,12 +35,24 @@ class ObservableLocatorImpl implements ObservableLocator {
   BinderState<T>? _stateFor<T>(Object key) {
     final state = _states[key];
 
-    assert(
-      state == null || state is BinderState<T>,
-      'The given key $key does not map to a binder state of type $T',
-    );
+    if (state == null) {
+      final parentState = _findParentStateFor<T>(key);
+      if (parentState != null) _parentStates[key] = parentState.cloneWith(this);
 
-    return state as BinderState<T>? ?? _parent?._stateFor<T>(key);
+      return _parentStates[key] as BinderState<T>?;
+    } else {
+      assert(
+        state is BinderState<T>,
+        'The given key $key does not map to a binder state of type $T',
+      );
+
+      return state as BinderState<T>?;
+    }
+  }
+
+  BinderState<T>? _findParentStateFor<T>(Object key) {
+    return (_parent?._states[key] as BinderState<T>?) ??
+        _parent?._findParentStateFor(key);
   }
 
   bool _debugCheckNotDisposed() {
@@ -109,6 +122,9 @@ class ObservableLocatorImpl implements ObservableLocator {
 
     final states = List<BinderState>.from(_states.values);
     states.forEach((state) => state.dispose());
+
+    final parentStates = List<BinderState>.from(_parentStates.values);
+    parentStates.forEach((parentState) => parentState.dispose());
 
     final children = List<ObservableLocatorImpl>.from(_children);
     children.forEach((child) => child.dispose());
