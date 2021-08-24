@@ -37,6 +37,7 @@ class BinderStateImpl<T, S> implements BinderState<T> {
         _stateTracker = _StateTracker.cloneFrom(
           locator: locator,
           parent: parent._stateTracker,
+          parentState: parent,
         );
 
   /// Callback for creating the state that holds the current value.
@@ -215,6 +216,7 @@ class _StateTracker<V> {
   _StateTracker.cloneFrom({
     required this.locator,
     required _StateTracker<V> parent,
+    required BinderStateImpl<dynamic, V> parentState,
   })  : keys = Set.of(parent.keys),
         tracker = parent.tracker,
         fn = parent.fn,
@@ -236,12 +238,19 @@ class _StateTracker<V> {
         if (_derivedFromParent && parent._observableHash == _observableHash) {
           // If deriving from parent and observables are the same,
           // watch the tracker and observables
-          final parentValue = untracked(() => unwrapValue(() => parent.value));
+          tracker.unwrappedValue;
+          final parentValue = untracked(
+            () => unwrapValue(() {
+              // Force evaluation of parent value.
+              // Ensures previous state and value of parent are available.
+              parentState.tryObserve();
+              return parentState._stateComputed.value;
+            }),
+          );
           if (parent._observableHash != _observableHash) {
             // We don't actually match, rely on own value
             return _observeOwnValue();
           } else {
-            tracker.unwrappedValue;
             return parentValue;
           }
         } else {

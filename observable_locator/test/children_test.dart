@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mobx/mobx.dart';
 import 'package:observable_locator/observable_locator.dart';
 import 'package:test/test.dart';
@@ -6,100 +8,203 @@ import 'utils.dart';
 
 void main() {
   group('children', () {
-    late ObservableLocator locator;
+    late ObservableLocator parent;
+    ReactionDisposer? disposeAutoWatch;
     var isDisposed = false;
+    var count = 0;
+
+    _Counter createCounter() => _Counter(count++);
 
     setUp(() {
       isDisposed = false;
+      count = 0;
+      disposeAutoWatch = null;
     });
 
     void disposeLocator() {
       if (!isDisposed) {
         isDisposed = true;
-        locator.dispose();
+        parent.dispose();
       }
+    }
+
+    void autoObserve<T>({required ObservableLocator of}) {
+      assert(disposeAutoWatch == null);
+      disposeAutoWatch = autorun((_) {
+        try {
+          of.observe<T>();
+        } catch (e) {
+          // NO OP
+        }
+      });
     }
 
     tearDown(() {
       disposeLocator();
+      disposeAutoWatch?.call();
+      disposeAutoWatch = null;
     });
 
-    test('can access parent registered values', () {
-      var count = 0;
-      final createBox = () => Box(count++);
+    group('can access parent values', () {
+      test('that already exist', () {
+        parent = ObservableLocator([
+          single<_Counter>(() => createCounter()),
+        ]);
 
-      locator = ObservableLocator([
-        single<Box>(() => createBox()),
-      ]);
+        final child = parent.createChild([]);
+        expect(child.parent, equals(parent));
 
-      final child = locator.createChild([]);
-      expect(child.parent, equals(locator));
+        autoObserve<_Counter>(of: parent); // read parent first
 
-      final disposeWatcher = autorun((_) => child.observe<Box>());
+        expect(parent.observe<_Counter>().value, equals(0));
+        expect(child.observe<_Counter>().value, equals(0));
+        expect(count, equals(1));
+      });
+      test('without overriding the value', () {
+        parent = ObservableLocator([
+          single<_Counter>(() => createCounter()),
+        ]);
 
-      expect(child.observe<Box>().value, equals(0));
-      expect(locator.observe<Box>().value, equals(0));
-      expect(count, equals(1));
+        final child = parent.createChild([]);
+        expect(child.parent, equals(parent));
 
-      disposeWatcher();
+        autoObserve<_Counter>(of: child); // read child first
+
+        expect(child.observe<_Counter>().value, equals(0));
+        expect(parent.observe<_Counter>().value, equals(0));
+        expect(count, equals(1));
+      });
+      test('that change due to observables', () {
+        final atom = Atom();
+
+        parent = ObservableLocator([
+          single<_Counter>(() {
+            atom.reportRead();
+            return createCounter();
+          }),
+        ]);
+
+        final child = parent.createChild([]);
+
+        expectAllObservableValues(
+          observeValuesOf<_Counter>([child, parent]),
+          emitsInOrder(<dynamic>[
+            emitsCounter(value: 0),
+            emitsCounter(value: 1),
+          ]),
+        );
+
+        expect(count, equals(1));
+        atom.reportChanged();
+        expect(count, equals(2));
+      });
+      test('that change due to state updates', () async {
+        parent = ObservableLocator([
+          singleFuture<_Counter>(() async {
+            await Future.microtask(() => null);
+            return createCounter();
+          }),
+        ]);
+
+        final child = parent.createChild([]);
+
+        expectAllObservableValues(
+          observeValuesOf<_Counter>([child, parent]),
+          emitsInOrder(<dynamic>[
+            emitsError(isA<LocatorValueMissingException>()),
+            emitsCounter(value: 0),
+          ]),
+        );
+
+        expect(count, equals(0));
+        await pumpEventQueue();
+        expect(count, equals(1));
+      });
+      test('with old values passed to bind callback', () async {
+        final description = Observable('first');
+        final cancelObservation = Completer<void>();
+
+        parent = ObservableLocator([
+          Binder<Disposable>(
+            (locator, value) =>
+                (value ??= Disposable())..description = description.value,
+            dispose: (disposable) => disposable.dispose(),
+          ),
+        ]);
+
+        final child = parent.createChild([]);
+
+        // ignore: unawaited_futures
+        expectObservableValue<Disposable>(
+          child.observe,
+          emitsInOrder(<dynamic>[
+            emitsDisposableWith(
+              description: 'first',
+              disposeCount: 0,
+            ),
+            emitsDone, // old object should be mutated, will not be re-emitted
+          ]),
+          cancelObservation: cancelObservation.future,
+        );
+
+        await pumpEventQueue();
+        description.setSingle('second');
+        await pumpEventQueue();
+        cancelObservation.complete();
+
+        expect(child.observe<Disposable>().description, equals('second'));
+      });
+      test('that have errors', () {
+        final shouldThrow = Observable(true);
+
+        parent = ObservableLocator([
+          single<_Counter>(
+            () => shouldThrow.value ? throw FormatException() : createCounter(),
+          ),
+        ]);
+
+        final child = parent.createChild([]);
+
+        expectAllObservableValues(
+          observeValuesOf<_Counter>([child, parent]),
+          emitsInOrder(<dynamic>[
+            emitsError(isFormatException),
+            emitsCounter(value: 0),
+          ]),
+        );
+
+        expect(count, equals(0));
+        shouldThrow.setSingle(false);
+        expect(count, equals(1));
+      });
     });
     test('can depend on parent values', () {
-      locator = ObservableLocator([
+      parent = ObservableLocator([
         single<Box>(() => Box('value')),
       ]);
 
-      final child = locator.createChild([
+      final child = parent.createChild([
         Binder<String>((locator, _) => locator.observe<Box>().value),
       ]);
 
       expect(child.observe<String>(), equals('value'));
     });
-    test('can override values of the parent', () {
-      locator = ObservableLocator([
-        single<int>(() => 100),
-      ]);
-
-      final child = locator.createChild([
-        single<int>(() => 200),
-      ]);
-
-      expect(child.observe<int>(), equals(200));
-      expect(locator.observe<int>(), equals(100));
-    });
-    test('values are scoped to each child', () {
-      locator = ObservableLocator([]);
-
-      final first = locator.createChild([
-        single<String>(() => 'first'),
-      ]);
-
-      final second = locator.createChild([
-        single<String>(() => 'second'),
-      ]);
-
-      expect(first.observe<String>(), equals('first'));
-      expect(second.observe<String>(), equals('second'));
-    });
-    test('can override intermediate values', () {
-      locator = ObservableLocator([
-        single<int>(() => 1),
-        Binder<String>((locator, _) => locator.observe<int>().toString()),
-      ]);
-
-      final child = locator.createChild([
-        single<int>(() => 2),
-      ]);
-
-      expect(child.observe<String>(), equals('2'));
-    });
-    test('can depend on values with changing intermediate dependencies', () {
+    test('can depend on parent values that change due to observables', () {
+      var parentCount = 0, childCount = 0;
       final observable = Observable(100);
-      locator = ObservableLocator([
-        single<int>(() => observable.value),
+
+      parent = ObservableLocator([
+        single<int>(() {
+          parentCount++;
+          return observable.value;
+        }),
       ]);
 
-      final child = locator.createChild([
-        Binder<String>((_, __) => locator.observe<int>().toString()),
+      final child = parent.createChild([
+        Binder<String>((locator, __) {
+          childCount++;
+          return locator.observe<int>().toString();
+        }),
       ]);
 
       expectObservableValue<String>(
@@ -111,14 +216,61 @@ void main() {
         ]),
       );
 
+      expect(parentCount, equals(1));
+      expect(childCount, equals(1));
+
       observable.setSingle(200);
+      expect(parentCount, equals(2));
+      expect(childCount, equals(2));
+
       observable.setSingle(300);
+      expect(parentCount, equals(3));
+      expect(childCount, equals(3));
     });
+    test('can override values of the parent', () {
+      parent = ObservableLocator([
+        single<int>(() => 100),
+      ]);
+
+      final child = parent.createChild([
+        single<int>(() => 200),
+      ]);
+
+      expect(child.observe<int>(), equals(200));
+      expect(parent.observe<int>(), equals(100));
+    });
+    test('values are scoped to each child', () {
+      parent = ObservableLocator([]);
+
+      final first = parent.createChild([
+        single<String>(() => 'first'),
+      ]);
+
+      final second = parent.createChild([
+        single<String>(() => 'second'),
+      ]);
+
+      expect(first.observe<String>(), equals('first'));
+      expect(second.observe<String>(), equals('second'));
+    });
+    test('can override intermediate values', () {
+      parent = ObservableLocator([
+        single<int>(() => 1),
+        Binder<String>((locator, _) => locator.observe<int>().toString()),
+      ]);
+
+      final child = parent.createChild([
+        single<int>(() => 2),
+      ]);
+
+      expect(child.observe<String>(), equals('2'));
+    });
+    // test('can override changing intermediate values', () {});
     test('disposing works', () {
-      locator = ObservableLocator([]);
+      parent = ObservableLocator([]);
 
       final disposable = Disposable();
-      final child = locator.createChild([
+      final child = parent.createChild([
         single<Disposable>(
           () => disposable,
           dispose: (value) => value.dispose(),
@@ -131,10 +283,10 @@ void main() {
       expect(disposable.disposeCount, equals(1));
     });
     test('disposing a parent will also dispose all children', () {
-      locator = ObservableLocator([]);
+      parent = ObservableLocator([]);
 
       final xDisposable = Disposable();
-      final x = locator.createChild([
+      final x = parent.createChild([
         single<Disposable>(
           () => xDisposable,
           dispose: (value) => value.dispose(),
@@ -181,3 +333,13 @@ void main() {
     });
   });
 }
+
+class _Counter {
+  _Counter(this.value);
+
+  final int value;
+}
+
+Matcher emitsCounter({required int value}) => emits(
+      predicate<_Counter>((counter) => counter.value == value),
+    );

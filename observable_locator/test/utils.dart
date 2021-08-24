@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:mobx/mobx.dart';
+import 'package:observable_locator/observable_locator.dart';
 import 'package:test/test.dart';
 
 /// Asserts that each value emited by the MobX observable value matches
@@ -36,6 +37,27 @@ Future<void> expectObservableValue<T>(
   controller.close();
   disposer();
 }
+
+void expectAllObservableValues(
+  Iterable<dynamic Function()> observeValues,
+  StreamMatcher matcher, {
+  Future<void>? cancelObservation,
+  bool debugPrint = false,
+}) {
+  for (final observableValue in observeValues) {
+    expectObservableValue(
+      observableValue,
+      matcher,
+      cancelObservation: cancelObservation,
+      debugPrint: debugPrint,
+    );
+  }
+}
+
+Iterable<T Function()> observeValuesOf<T>(
+  Iterable<ObservableLocator> locators,
+) =>
+    locators.map((locator) => () => locator.observe<T>());
 
 extension ObservableExtensions<T> on Observable<T> {
   void setSingle(T value) => Action(() => this.value = value).call();
