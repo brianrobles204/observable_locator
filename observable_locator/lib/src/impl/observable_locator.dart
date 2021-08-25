@@ -2,7 +2,8 @@ import '../api.dart';
 import '../exceptions.dart';
 
 class ObservableLocatorImpl implements ObservableLocator {
-  ObservableLocatorImpl(Iterable<Binder> binders) : _parent = null {
+  ObservableLocatorImpl([Iterable<Binder> binders = const []])
+      : _parent = null {
     _initStates(binders);
   }
 
@@ -100,7 +101,7 @@ class ObservableLocatorImpl implements ObservableLocator {
   }
 
   @override
-  ObservableLocator createChild(Iterable<Binder> binders) {
+  ObservableLocator createChild([Iterable<Binder> binders = const []]) {
     assert(_debugCheckNotDisposed());
 
     final child = ObservableLocatorImpl._fromParent(this, binders);

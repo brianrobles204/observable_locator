@@ -31,11 +31,11 @@ abstract class ObservableSource {
 }
 
 abstract class ObservableLocator implements ObservableSource {
-  factory ObservableLocator(Iterable<Binder> binders) = ObservableLocatorImpl;
+  factory ObservableLocator([Iterable<Binder> binders]) = ObservableLocatorImpl;
 
   ObservableLocator? get parent;
   List<ObservableLocator> get children;
-  ObservableLocator createChild(Iterable<Binder> binders);
+  ObservableLocator createChild([Iterable<Binder> binders = const []]);
 
   @mustCallSuper
   void dispose();
