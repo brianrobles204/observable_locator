@@ -16,6 +16,20 @@ abstract class Vertex {
   int get disposeCount => _disposeCount;
 
   void dispose() => _disposeCount++;
+
+  Map<String, String> get descriptions => {
+        'count': count.toString(),
+        'value': value ?? 'null',
+        'obsValue': obsValue ?? 'null',
+        'mutValue': mutValue ?? 'null',
+        'disposeCount': disposeCount.toString(),
+      };
+
+  @override
+  String toString() =>
+      '$runtimeType {' +
+      descriptions.entries.map((e) => e.key + ': ' + e.value).join(', ') +
+      '}';
 }
 
 class Tail extends Vertex {
@@ -32,9 +46,18 @@ class Head extends Vertex {
     String? value,
     String? obsValue,
     this.tailValue,
+    this.tailObsValue,
   }) : super(count, value: value, obsValue: obsValue);
 
   final String? tailValue;
+  final String? tailObsValue;
+
+  @override
+  Map<String, String> get descriptions => {
+        ...super.descriptions,
+        'tailValue': tailValue ?? 'null',
+        'tailObsValue': tailObsValue ?? 'null',
+      };
 }
 
 enum _Gen { parent, child }
@@ -77,8 +100,11 @@ class ChildrenTestHelper {
   ObservableLocator? _parent;
   ObservableLocator? _child;
 
-  int _totalCount = 0;
-  int get totalCount => _totalCount;
+  /// Number of times a vertex has been created successfully
+  int get createCount => _createCount;
+  int _createCount = 0;
+
+  /// Counts - number of times the corresponding binder callback has been run
 
   int get parentHeadCount => _count[_Gen.parent]![Head]!;
   int get parentTailCount => _count[_Gen.parent]![Tail]!;
@@ -124,44 +150,44 @@ class ChildrenTestHelper {
 
   /// Observables
 
-  Observable<String> withObservableParentHead(String value) =>
+  Observable<String> whereParentHeadObserves(String value) =>
       _observables[_Gen.parent]![Head] ??= Observable<String>(value);
 
-  Observable<String> withObservableChildHead(String value) =>
+  Observable<String> whereChildHeadObserves(String value) =>
       _observables[_Gen.child]![Head] ??= Observable<String>(value);
 
-  Observable<String> withObservableParentTail(String value) =>
+  Observable<String> whereParentTailObserves(String value) =>
       _observables[_Gen.parent]![Tail] ??= Observable<String>(value);
 
-  Observable<String> withObservableChildTail(String value) =>
+  Observable<String> whereChildTailObserves(String value) =>
       _observables[_Gen.child]![Tail] ??= Observable<String>(value);
 
   /// Throwables
 
-  Observable<Object?> withThrowableParentHead(Object? error) =>
+  Observable<Object?> whereParentHeadThrows(Object? error) =>
       _throwables[_Gen.parent]![Head] ??= Observable<Object?>(error);
 
-  Observable<Object?> withThrowableChildHead(Object? error) =>
+  Observable<Object?> whereChildHeadThrows(Object? error) =>
       _throwables[_Gen.child]![Head] ??= Observable<Object?>(error);
 
-  Observable<Object?> withThrowableParentTail(Object? error) =>
+  Observable<Object?> whereParentTailThrows(Object? error) =>
       _throwables[_Gen.parent]![Tail] ??= Observable<Object?>(error);
 
-  Observable<Object?> withThrowableChildTail(Object? error) =>
+  Observable<Object?> whereChildTailThrows(Object? error) =>
       _throwables[_Gen.child]![Tail] ??= Observable<Object?>(error);
 
   /// Mutables
 
-  Observable<String> withMutableParentHead(String mutValue) =>
+  Observable<String> whereParentHeadMutates(String mutValue) =>
       _mutObservables[_Gen.parent]![Head] ??= Observable<String>(mutValue);
 
-  Observable<String> withMutableChildHead(String mutValue) =>
+  Observable<String> whereChildHeadMutates(String mutValue) =>
       _mutObservables[_Gen.child]![Head] ??= Observable<String>(mutValue);
 
-  Observable<String> withMutableParentTail(String mutValue) =>
+  Observable<String> whereParentTailMutates(String mutValue) =>
       _mutObservables[_Gen.parent]![Tail] ??= Observable<String>(mutValue);
 
-  Observable<String> withMutableChildTail(String mutValue) =>
+  Observable<String> whereChildTailMutates(String mutValue) =>
       _mutObservables[_Gen.child]![Tail] ??= Observable<String>(mutValue);
 
   void _increment<T extends Vertex>(_Gen gen) {
@@ -187,22 +213,24 @@ class ChildrenTestHelper {
     String? value,
     String? obsValue,
     String? tailValue,
+    String? tailObsValue,
     String? mutValue,
   }) {
     assert(T != Vertex);
-    assert(T == Head || tailValue == null);
+    assert(T == Head || (tailValue == null && tailObsValue == null));
 
     final vertex = () {
       if (T == Head) {
         return Head(
-          _totalCount++,
+          _createCount++,
           value: value,
           obsValue: obsValue,
           tailValue: tailValue,
+          tailObsValue: tailObsValue,
         )..mutValue = mutValue;
       } else {
         return Tail(
-          _totalCount++,
+          _createCount++,
           value: value,
           obsValue: obsValue,
         )..mutValue = mutValue;
@@ -221,28 +249,34 @@ class ChildrenTestHelper {
     assert(T == Head || !linkToTail);
 
     _binders[gen]!.add(
-      Binder<T>((locator, vertex) {
-        _increment<T>(gen);
+      Binder<T>(
+        (locator, vertex) {
+          _increment<T>(gen);
 
-        final tailValue = linkToTail ? locator.observe<Tail>().value : null;
+          final tail = linkToTail ? locator.observe<Tail>() : null;
+          final tailValue = tail?.value;
+          final tailObsValue = tail?.obsValue;
 
-        final obsValue = _observableValueOf<T>(_observables, gen)?.value;
+          final obsValue = _observableValueOf<T>(_observables, gen)?.value;
 
-        final throwable = _observableOf<T, Object?>(_throwables, gen)?.value;
-        if (throwable != null) throw throwable;
+          final throwable = _observableOf<T, Object?>(_throwables, gen)?.value;
+          if (throwable != null) throw throwable;
 
-        final mutObservable = _observableValueOf<T>(_mutObservables, gen);
-        if (mutObservable != null && vertex != null) {
-          return vertex..mutValue = mutObservable.value;
-        }
+          final mutObservable = _observableValueOf<T>(_mutObservables, gen);
+          if (mutObservable != null && vertex != null) {
+            return vertex..mutValue = mutObservable.value;
+          }
 
-        return _create<T>(
-          value: value,
-          obsValue: obsValue,
-          tailValue: tailValue,
-          mutValue: mutObservable?.value,
-        );
-      }),
+          return _create<T>(
+            value: value,
+            obsValue: obsValue,
+            tailValue: tailValue,
+            tailObsValue: tailObsValue,
+            mutValue: mutObservable?.value,
+          );
+        },
+        dispose: (vertex) => vertex.dispose(),
+      ),
     );
   }
 
@@ -261,7 +295,9 @@ class ChildrenTestHelper {
         (locator, vertex, future) {
           _increment<T>(gen);
 
-          final tailValue = linkToTail ? locator.observe<Tail>().value : null;
+          final tail = linkToTail ? locator.observe<Tail>() : null;
+          final tailValue = tail?.value;
+          final tailObsValue = tail?.obsValue;
 
           final obsValue = _observableValueOf<T>(_observables, gen)?.value;
 
@@ -279,11 +315,14 @@ class ChildrenTestHelper {
               value: value,
               obsValue: obsValue,
               tailValue: tailValue,
+              tailObsValue: tailObsValue,
+              mutValue: mutObservable?.value,
             ),
           );
         },
         pendingValue:
             pendingValue != null ? _create<T>(value: pendingValue) : null,
+        dispose: (vertex) => vertex.dispose(),
       ),
     );
 
@@ -305,7 +344,9 @@ class ChildrenTestHelper {
         (locator, vertex, stream) {
           _increment<T>(gen);
 
-          final tailValue = linkToTail ? locator.observe<Tail>().value : null;
+          final tail = linkToTail ? locator.observe<Tail>() : null;
+          final tailValue = tail?.value;
+          final tailObsValue = tail?.obsValue;
 
           final obsValue = _observableValueOf<T>(_observables, gen)?.value;
 
@@ -323,11 +364,14 @@ class ChildrenTestHelper {
               value: value,
               obsValue: obsValue,
               tailValue: tailValue,
+              tailObsValue: tailObsValue,
+              mutValue: mutObservable?.value,
             ),
           );
         },
         pendingValue:
             pendingValue != null ? _create<T>(value: pendingValue) : null,
+        dispose: (vertex) => vertex.dispose(),
       ),
     );
 
@@ -341,7 +385,7 @@ class ChildrenTestHelper {
     _mutObservables.values.forEach((map) => map.clear());
     _throwables.values.forEach((map) => map.clear());
 
-    _totalCount = 0;
+    _createCount = 0;
     _isInit = false;
     _parent = null;
     _child = null;
@@ -386,6 +430,15 @@ class ChildrenTestHelper {
   void dispose() {
     _parent?.dispose();
   }
+
+  @override
+  String toString() => 'ChildrenTestHelper { '
+      'parentHeadCount: $parentHeadCount, '
+      'childHeadCount: $childHeadCount, '
+      'parentTailCount: $parentTailCount, '
+      'childTailCount: $childTailCount, '
+      'createCount: $createCount, '
+      '}';
 }
 
 Matcher isHeadWith({
@@ -394,18 +447,28 @@ Matcher isHeadWith({
   String? obsValue,
   String? mutValue,
   String? tailValue,
+  String? tailObsValue,
   int? disposeCount,
 }) =>
     _isVertexWith<Head>(
-        count: count,
-        value: value,
-        obsValue: obsValue,
-        mutValue: mutValue,
-        disposeCount: disposeCount,
-        otherChecks: (head) => tailValue == null || tailValue == head.tailValue,
-        otherDescriptions: [
-          if (tailValue != null) 'has tailValue of $tailValue'
-        ]);
+      count: count,
+      value: value,
+      obsValue: obsValue,
+      mutValue: mutValue,
+      disposeCount: disposeCount,
+      otherChecks: (head) {
+        final isTailValueValid =
+            tailValue == null || tailValue == head.tailValue;
+        final isTailObsValueValid =
+            tailObsValue == null || tailObsValue == head.tailObsValue;
+
+        return isTailValueValid && isTailObsValueValid;
+      },
+      otherDescriptions: [
+        if (tailValue != null) 'has tailValue of $tailValue',
+        if (tailObsValue != null) 'has tailObsValue of $tailObsValue'
+      ],
+    );
 
 Matcher isTailWith<T>({
   int? count,
@@ -454,5 +517,39 @@ Matcher _isVertexWith<T extends Vertex>({
         if (mutValue != null) 'has mutValue of $mutValue',
         if (disposeCount != null) 'has disposeCount of $disposeCount',
         ...?otherDescriptions,
+      ].join(', '),
+    );
+
+Matcher hasCount({
+  int? parentHead,
+  int? childHead,
+  int? parentTail,
+  int? childTail,
+  int? create,
+}) =>
+    predicate<ChildrenTestHelper>(
+      (helper) {
+        final isParentHeadValid =
+            parentHead == null || helper.parentHeadCount == parentHead;
+        final isChildHeadValid =
+            childHead == null || helper.childHeadCount == childHead;
+        final isParentTailValid =
+            parentTail == null || helper.parentTailCount == parentTail;
+        final isChildTailValid =
+            childTail == null || helper.childTailCount == childTail;
+        final isCreateValid = create == null || helper.createCount == create;
+
+        return isParentHeadValid &&
+            isChildHeadValid &&
+            isParentTailValid &&
+            isChildTailValid &&
+            isCreateValid;
+      },
+      [
+        if (parentHead != null) 'has parentHeadCount of $parentHead',
+        if (childHead != null) 'has childHeadCount of $childHead',
+        if (parentTail != null) 'has parentTailCount of $parentTail',
+        if (childTail != null) 'has childTailCount of $childTail',
+        if (create != null) 'has createCount of $create',
       ].join(', '),
     );
