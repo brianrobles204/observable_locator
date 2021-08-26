@@ -226,7 +226,7 @@ void main() {
         locator.observe,
         emitsInOrder(<dynamic>[
           emitsError(isA<LocatorValueMissingException>()),
-          emitsDisposableWith(
+          isDisposableWith(
             description: 'first',
             disposeCount: 0,
           ),

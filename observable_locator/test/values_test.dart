@@ -34,7 +34,7 @@ void main() {
     });
 
     test('throw if type is not registered', () {
-      locator = ObservableLocator([]);
+      locator = ObservableLocator();
 
       expect(
         () => locator.observe<String>(),
@@ -341,7 +341,7 @@ void main() {
       expectObservableValue<Disposable>(
         locator.observe,
         emitsInOrder(<dynamic>[
-          emitsDisposableWith(
+          isDisposableWith(
             description: 'first',
             disposeCount: 0,
           ),

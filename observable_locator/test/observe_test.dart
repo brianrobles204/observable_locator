@@ -80,7 +80,7 @@ void main() {
       cancelObservation.complete();
     });
     test('handles unregistered types', () async {
-      locator = ObservableLocator([]);
+      locator = ObservableLocator();
       final cancelObservation = Completer<void>();
 
       // ignore: unawaited_futures
@@ -106,7 +106,7 @@ void main() {
       cancelObservation.complete();
     });
     test('throws if observing dynamic type', () async {
-      locator = ObservableLocator([]);
+      locator = ObservableLocator();
       expect(
         () => locator.observe<dynamic>(),
         throwsA(isA<AssertionError>()),

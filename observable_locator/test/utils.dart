@@ -87,12 +87,12 @@ class Disposable {
       '}';
 }
 
-Matcher emitsDisposableWith({
+Matcher isDisposableWith({
   String? name,
   String? description,
   int? disposeCount,
 }) =>
-    emits(predicate<Disposable>(
+    predicate<Disposable>(
       (d) {
         final nameIsValid = name == null || d.name == name;
         final descriptionIsValid =
@@ -107,4 +107,4 @@ Matcher emitsDisposableWith({
         if (description != null) 'has description of $description',
         if (disposeCount != null) 'has disposeCount of $disposeCount',
       ].join(', '),
-    ));
+    );
