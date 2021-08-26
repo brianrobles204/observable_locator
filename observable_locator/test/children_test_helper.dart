@@ -151,44 +151,56 @@ class ChildrenTestHelper {
   /// Observables
 
   Observable<String> whereParentHeadObserves(String value) =>
-      _observables[_Gen.parent]![Head] ??= Observable<String>(value);
+      _observables[_Gen.parent]![Head] ??=
+          Observable<String>(value, name: 'Parent-Head-Observable');
 
   Observable<String> whereChildHeadObserves(String value) =>
-      _observables[_Gen.child]![Head] ??= Observable<String>(value);
+      _observables[_Gen.child]![Head] ??=
+          Observable<String>(value, name: 'Child-Head-Observable');
 
   Observable<String> whereParentTailObserves(String value) =>
-      _observables[_Gen.parent]![Tail] ??= Observable<String>(value);
+      _observables[_Gen.parent]![Tail] ??=
+          Observable<String>(value, name: 'Parent-Tail-Observable');
 
   Observable<String> whereChildTailObserves(String value) =>
-      _observables[_Gen.child]![Tail] ??= Observable<String>(value);
+      _observables[_Gen.child]![Tail] ??=
+          Observable<String>(value, name: 'Child-Head-Observable');
 
   /// Throwables
 
   Observable<Object?> whereParentHeadThrows(Object? error) =>
-      _throwables[_Gen.parent]![Head] ??= Observable<Object?>(error);
+      _throwables[_Gen.parent]![Head] ??=
+          Observable<Object?>(error, name: 'Parent-Head-Throwable');
 
   Observable<Object?> whereChildHeadThrows(Object? error) =>
-      _throwables[_Gen.child]![Head] ??= Observable<Object?>(error);
+      _throwables[_Gen.child]![Head] ??=
+          Observable<Object?>(error, name: 'Child-Head-Throwable');
 
   Observable<Object?> whereParentTailThrows(Object? error) =>
-      _throwables[_Gen.parent]![Tail] ??= Observable<Object?>(error);
+      _throwables[_Gen.parent]![Tail] ??=
+          Observable<Object?>(error, name: 'Parent-Tail-Throwable');
 
   Observable<Object?> whereChildTailThrows(Object? error) =>
-      _throwables[_Gen.child]![Tail] ??= Observable<Object?>(error);
+      _throwables[_Gen.child]![Tail] ??=
+          Observable<Object?>(error, name: 'Child-Tail-Throwable');
 
   /// Mutables
 
   Observable<String> whereParentHeadMutates(String mutValue) =>
-      _mutObservables[_Gen.parent]![Head] ??= Observable<String>(mutValue);
+      _mutObservables[_Gen.parent]![Head] ??=
+          Observable<String>(mutValue, name: 'Parent-Head-Mutable');
 
   Observable<String> whereChildHeadMutates(String mutValue) =>
-      _mutObservables[_Gen.child]![Head] ??= Observable<String>(mutValue);
+      _mutObservables[_Gen.child]![Head] ??=
+          Observable<String>(mutValue, name: 'Child-Head-Mutable');
 
   Observable<String> whereParentTailMutates(String mutValue) =>
-      _mutObservables[_Gen.parent]![Tail] ??= Observable<String>(mutValue);
+      _mutObservables[_Gen.parent]![Tail] ??=
+          Observable<String>(mutValue, name: 'Parent-Tail-Mutable');
 
   Observable<String> whereChildTailMutates(String mutValue) =>
-      _mutObservables[_Gen.child]![Tail] ??= Observable<String>(mutValue);
+      _mutObservables[_Gen.child]![Tail] ??=
+          Observable<String>(mutValue, name: 'Child-Tail-Mutable');
 
   void _increment<T extends Vertex>(_Gen gen) {
     assert(T != Vertex);
@@ -323,6 +335,7 @@ class ChildrenTestHelper {
         pendingValue:
             pendingValue != null ? _create<T>(value: pendingValue) : null,
         dispose: (vertex) => vertex.dispose(),
+        name: '${gen == _Gen.parent ? 'Parent' : 'Child'}-$Type',
       ),
     );
 
@@ -372,6 +385,7 @@ class ChildrenTestHelper {
         pendingValue:
             pendingValue != null ? _create<T>(value: pendingValue) : null,
         dispose: (vertex) => vertex.dispose(),
+        name: '${gen == _Gen.parent ? 'Parent' : 'Child'}-$Type',
       ),
     );
 

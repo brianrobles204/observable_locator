@@ -34,7 +34,7 @@ class ObservableLocatorImpl implements ObservableLocator {
   bool _isDisposed = false;
 
   BinderState<T>? _stateFor<T>(Object key) {
-    final state = _states[key];
+    final state = _states[key] ?? _parentStates[key];
 
     if (state == null) {
       final parentState = _findParentStateFor<T>(key);

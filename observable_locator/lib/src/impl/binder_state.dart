@@ -74,7 +74,8 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   T? _value;
   S? _state;
 
-  Computed<S> get _stateComputed => (__stateComputed ??= Computed(_stateFn));
+  Computed<S> get _stateComputed =>
+      (__stateComputed ??= Computed(_stateFn, name: 'BinderState<$T>.state'));
   Computed<S>? __stateComputed;
   bool get _hasState => __stateComputed != null;
 
@@ -92,8 +93,11 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   static bool _defaultEquals<T>(T? newValue, T? oldValue) =>
       newValue == oldValue;
 
-  Computed<T?> get _valueComputed =>
-      __valueComputed ??= Computed(_valueFn, equals: equals ?? _defaultEquals);
+  Computed<T?> get _valueComputed => __valueComputed ??= Computed(
+        _valueFn,
+        equals: equals ?? _defaultEquals,
+        name: 'BinderState<$T>.value',
+      );
   Computed<T?>? __valueComputed;
 
   T? _valueFn() {
@@ -189,10 +193,11 @@ class _StateTracker<S> {
           return _trackValue();
         } catch (_) {
           // rely on observables only if an error occured
-          _observeHash();
+          _observableHash = _observeHash();
           rethrow;
         }
       },
+      name: 'BinderState.tracker-main<$S>',
       equals: (_, __) => false,
     );
     _value = Computed(
@@ -216,6 +221,7 @@ class _StateTracker<S> {
           _isDirty = false;
         }
       },
+      name: 'BinderState.trackerValue-main<$S>',
       equals: equals,
     );
   }
@@ -245,26 +251,38 @@ class _StateTracker<S> {
         if (_derivedFromParent && parent._observableHash == _observableHash) {
           // If deriving from parent and observables are the same,
           // watch the tracker and observables
-          tracker.unwrappedValue;
-          final parentValue = untracked(
-            () => unwrapValue(() {
-              // Force evaluation of parent value.
-              // Ensures previous state and value of parent are available.
-              parentState.tryObserve();
-              return parentState._stateComputed.value;
-            }),
-          );
+          late S parentValue;
+          Object? error;
+          try {
+            tracker.unwrappedValue;
+            parentValue = untracked(
+              () => unwrapValue(() {
+                // Force evaluation of parent value.
+                // Ensures previous state and value of parent are available.
+                parentState.tryObserve();
+                return parentState._stateComputed.value;
+              }),
+            );
+          } catch (e) {
+            error = e;
+          }
+
           if (parent._observableHash != _observableHash) {
-            // We don't actually match, rely on own value
+            // We don't actually match after trying parent, rely on own value
             return _observeOwnValue();
           } else {
-            return parentValue;
+            if (error != null) {
+              throw error;
+            } else {
+              return parentValue;
+            }
           }
         } else {
           return _observeOwnValue();
         }
       },
       equals: equals,
+      name: 'BinderState.trackerValue-clone<$S>',
     );
   }
 

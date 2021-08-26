@@ -57,6 +57,7 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
     this.catchError,
     this.equals,
     this.dispose,
+    this.name,
   });
 
   final FutureValueBuilder<T> fn;
@@ -64,6 +65,7 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   final ErrorBuilder<T>? catchError;
   final Equals<T>? equals;
   final DisposeCallback<T>? dispose;
+  final String? name;
 
   @override
   BinderState<T> createState(ObservableLocator locator) =>
@@ -72,7 +74,9 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
           final future = fn(locator, currentValue, currentState);
 
           if (future is ObservableFuture<T>) return future;
-          return future.asObservable();
+          return future.asObservable(
+            name: name != null ? 'FutureBinder<$T>@$name' : 'FutureBinder<$T>',
+          );
         },
         observeFrom: (computedState) {
           if (computedState.error != null) throw computedState.error as Object;
@@ -101,6 +105,7 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
     this.catchError,
     this.equals,
     this.dispose,
+    this.name,
   });
 
   final StreamValueBuilder<T> fn;
@@ -108,6 +113,7 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   final ErrorBuilder<T>? catchError;
   final Equals<T>? equals;
   final DisposeCallback<T>? dispose;
+  final String? name;
 
   @override
   BinderState<T> createState(ObservableLocator locator) =>
@@ -116,7 +122,9 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
           final stream = fn(locator, currentValue, currentState);
 
           if (stream is ObservableStream<T>) return stream;
-          return stream.asObservable();
+          return stream.asObservable(
+            name: name != null ? 'StreamBinder<$T>@$name' : 'StreamBinder<$T>',
+          );
         },
         observeFrom: (computedState) {
           if (computedState.error != null) throw computedState.error as Object;

@@ -14,28 +14,35 @@ Future<void> expectObservableValue<T>(
   StreamMatcher matcher, {
   Future<void>? cancelObservation,
   bool debugPrint = false,
+  String? name,
 }) async {
   final controller = StreamController<T>();
 
-  final disposer = autorun((_) {
-    try {
-      final value = observeValue();
-      if (debugPrint) print('DEBUG: $value');
-      controller.add(value);
-    } catch (e) {
-      if (debugPrint) print('DEBUG: $e');
-      controller.addError(e);
-    }
-  });
+  final disposer = autorun(
+    (_) {
+      try {
+        final value = observeValue();
+        if (debugPrint) print('DEBUG: $value');
+        controller.add(value);
+      } catch (e) {
+        if (debugPrint) print('DEBUG: $e');
+        controller.addError(e);
+      }
+    },
+    name:
+        name != null ? 'expectObservableValue-$name' : 'expectObservableValue',
+  );
 
   // ignore: unawaited_futures
   cancelObservation?.then<void>((_) => controller.close());
 
-  await expectLater(controller.stream, matcher);
-
-  // ignore: unawaited_futures
-  controller.close();
-  disposer();
+  try {
+    await expectLater(controller.stream, matcher);
+  } finally {
+    // ignore: unawaited_futures
+    controller.close();
+    disposer();
+  }
 }
 
 void expectAllObservableValues(
@@ -59,8 +66,15 @@ Iterable<T Function()> observeValuesOf<T>(
 ) =>
     locators.map((locator) => () => locator.observe<T>());
 
+void enableContextSpy() {
+  mainContext
+    ..config = ReactiveConfig.main.clone(isSpyEnabled: true)
+    ..spy((event) => print(event));
+}
+
 extension ObservableExtensions<T> on Observable<T> {
-  void setSingle(T value) => Action(() => this.value = value).call();
+  void setSingle(T value) =>
+      Action(() => this.value = value, name: '$name.setSingle').call();
 }
 
 class Box<T> {

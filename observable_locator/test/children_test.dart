@@ -438,6 +438,16 @@ void main() {
       });
     });
     group('can override intermediate values', () {
+      // Initial count after reading the child head.
+      // > Create parent head (& tail), then child tail, then child head
+      final hasInitialCount = hasCount(
+        parentHead: 2, // child uses parent head binder
+        parentTail: 1, // parent tail used when constructing parent
+        childHead: 0,
+        childTail: 1,
+        create: 4,
+      );
+
       test('basic case', () {
         helper
           ..addParentTailValue(value: 'original')
@@ -445,29 +455,243 @@ void main() {
           ..addChildTailValue(value: 'override')
           ..initLocators();
 
-        // Construct parent head (and tail), then child tail, then child head
         expect(helper.childHead, isHeadWith(tailValue: 'override', count: 3));
+        expect(helper, hasInitialCount);
+
+        expect(helper.parentHead, isHeadWith(tailValue: 'original', count: 1));
+        expect(helper, hasInitialCount); // Same, since instances are reused
+      });
+      test('while changing due to observables', () {
+        helper
+          ..addParentTailValue(value: 'original')
+          ..addParentHeadValue(linkToTail: true)
+          ..addChildTailValue(value: 'override')
+          ..initLocators();
+
+        final parentTailObs = helper.whereParentTailObserves('first');
+        final childTailObs = helper.whereChildTailObserves('uno');
+        final parentHeadObs = helper.whereParentHeadObserves('apple');
+
+        expectObservableValue(
+          () => helper.childHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailValue: 'override', tailObsValue: 'uno', count: 3),
+            isHeadWith(tailValue: 'override', tailObsValue: 'dos', count: 7),
+            isHeadWith(tailValue: 'override', tailObsValue: 'tres', count: 9),
+            isHeadWith(obsValue: 'blueberry', tailValue: 'override', count: 13),
+          ]),
+          name: 'childHead',
+        );
+
+        expect(helper, hasInitialCount);
+
+        expectObservableValue(
+          () => helper.parentHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailValue: 'original', tailObsValue: 'first', count: 1),
+            isHeadWith(tailValue: 'original', tailObsValue: 'second', count: 5),
+            isHeadWith(tailValue: 'original', tailObsValue: 'third', count: 11),
+            isHeadWith(obsValue: 'blueberry', tailValue: 'original', count: 12),
+          ]),
+          name: 'parentHead',
+        );
+
+        expect(helper, hasInitialCount);
+
+        parentTailObs.setSingle('second');
         expect(
           helper,
           hasCount(
-            parentHead: 2, // child uses parent head binder
-            parentTail: 1, // parent tail used when constructing parent
+            parentHead: 3,
+            parentTail: 2,
             childHead: 0,
             childTail: 1,
-            create: 4,
+            create: 6,
           ),
         );
 
-        expect(helper.parentHead, isHeadWith(tailValue: 'original', count: 1));
-        // Same counts, since same instances are reused
+        childTailObs.setSingle('dos');
         expect(
           helper,
           hasCount(
-            parentHead: 2,
-            parentTail: 1,
+            parentHead: 4,
+            parentTail: 2,
             childHead: 0,
+            childTail: 2,
+            create: 8,
+          ),
+        );
+
+        childTailObs.setSingle('tres');
+        expect(
+          helper,
+          hasCount(
+            parentHead: 5,
+            parentTail: 2,
+            childHead: 0,
+            childTail: 3,
+            create: 10,
+          ),
+        );
+
+        parentTailObs.setSingle('third');
+        expect(
+          helper,
+          hasCount(
+            parentHead: 6,
+            parentTail: 3,
+            childHead: 0,
+            childTail: 3,
+            create: 12,
+          ),
+        );
+
+        parentHeadObs.setSingle('blueberry');
+        expect(
+          helper,
+          hasCount(
+            parentHead: 8,
+            parentTail: 3,
+            childHead: 0,
+            childTail: 3,
+            create: 14,
+          ),
+        );
+      });
+      test('while also changing due to async updates', () async {
+        final parentTailSink = helper.addParentTailStream();
+        final parentHeadSink = helper.addParentHeadStream(
+            pendingValue: 'pending', linkToTail: true);
+        final childTailSink = helper.addChildTailStream();
+        helper.initLocators();
+
+        // ignore: unawaited_futures
+        expectObservableValue(
+          () => helper.childHead,
+          emitsInOrder(<dynamic>[
+            emitsError(isA<LocatorValueMissingException>()),
+            isHeadWith(value: 'pending', tailValue: null, count: 0),
+            isHeadWith(value: 'ph-1', tailValue: 'ct-1', count: 3),
+            isHeadWith(value: 'ph-2', tailValue: 'ct-1', count: 6),
+            isHeadWith(value: 'pending', tailValue: null, count: 0), // orig
+            isHeadWith(value: 'ph-3', tailValue: 'ct-2', count: 10),
+          ]),
+        );
+
+        await pumpEventQueue();
+        final hasInitialAsyncCount = hasCount(
+          parentHead: 2,
+          childHead: 0,
+          parentTail: 1,
+          childTail: 1,
+          create: 1, // pending value
+        );
+        expect(helper, hasInitialAsyncCount);
+
+        // ignore: unawaited_futures
+        expectObservableValue(
+          () => helper.parentHead,
+          emitsInOrder(<dynamic>[
+            emitsError(isA<LocatorValueMissingException>()),
+            isHeadWith(value: 'pending', tailValue: null, count: 0),
+            isHeadWith(value: 'ph-1', tailValue: 'pt-1', count: 4),
+            isHeadWith(value: 'pending', tailValue: null, count: 0), // orig
+            isHeadWith(value: 'ph-2', tailValue: 'pt-2', count: 7),
+            isHeadWith(value: 'ph-3', tailValue: 'pt-2', count: 9),
+          ]),
+        );
+
+        await pumpEventQueue();
+        expect(helper, hasInitialAsyncCount);
+
+        childTailSink.add('ct-1');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 3,
+            childHead: 0,
+            parentTail: 1,
             childTail: 1,
-            create: 4,
+            create: 2,
+          ),
+        );
+
+        parentTailSink.add('pt-1');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 4,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 3,
+          ),
+        );
+
+        parentHeadSink.add('ph-1');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 4,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 5,
+          ),
+        );
+
+        parentTailSink.add('pt-2');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 5,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 6,
+          ),
+        );
+
+        parentHeadSink.add('ph-2');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 5,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 8,
+          ),
+        );
+
+        childTailSink.add('ct-2');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 6,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 9,
+          ),
+        );
+
+        parentHeadSink.add('ph-3');
+        await pumpEventQueue();
+        expect(
+          helper,
+          hasCount(
+            parentHead: 6,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 1,
+            create: 11,
           ),
         );
       });
