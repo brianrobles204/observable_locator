@@ -285,6 +285,50 @@ void main() {
         childObs.setSingle('z');
         expect(helper, hasCount(parentHead: 3, childHead: 3));
       });
+      test('without being affected by parent dependencies', () {
+        final tailObs = helper.whereParentTailObserves('first');
+        final cancelObservation = Completer<void>();
+
+        helper
+          ..addParentTailValue()
+          ..addParentHeadValue(linkToTail: true)
+          ..addChildHeadValue()
+          ..initLocators();
+
+        expectObservableValue(
+          () => helper.childHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailObsValue: null, count: 0),
+            emitsDone,
+          ]),
+          cancelObservation: cancelObservation.future,
+        );
+
+        expect(helper, hasCount(childHead: 1, create: 1));
+
+        expectObservableValue(
+          () => helper.parentHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailObsValue: 'first', count: 2),
+            isHeadWith(tailObsValue: 'second', count: 4),
+            emitsDone,
+          ]),
+          cancelObservation: cancelObservation.future,
+        );
+
+        expect(
+          helper,
+          hasCount(childHead: 1, parentTail: 1, parentHead: 1, create: 3),
+        );
+
+        tailObs.setSingle('second');
+        expect(
+          helper,
+          hasCount(childHead: 1, parentTail: 2, parentHead: 2, create: 5),
+        );
+
+        cancelObservation.complete();
+      });
       test('that change due to async updates', () async {
         final parentSink = helper.addParentHeadStream();
         final childSink = helper.addChildHeadStream();
