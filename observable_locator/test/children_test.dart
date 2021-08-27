@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:mobx/mobx.dart';
 import 'package:observable_locator/observable_locator.dart';
@@ -772,6 +773,80 @@ void main() {
             parentTail: 1,
             childTail: 1,
             create: 11,
+          ),
+        );
+      });
+      test('while handling errors', () {
+        final ptThrowable = helper.whereParentTailThrows(FormatException());
+        final ctThrowable = helper.whereChildTailThrows(FormatException());
+
+        helper
+          ..addParentTailValue(value: 'original')
+          ..addChildTailValue(value: 'override')
+          ..addParentHeadValue(linkToTail: true)
+          ..initLocators();
+
+        expectObservableValue(
+          () => helper.childHead,
+          emitsInOrder(<dynamic>[
+            emitsError(isFormatException),
+            emitsError(isNullThrownError),
+            isHeadWith(tailValue: 'override', count: 3),
+          ]),
+        );
+
+        final hasInitialErrorCount = hasCount(
+          parentHead: 2,
+          childHead: 0,
+          parentTail: 1,
+          childTail: 1,
+          create: 0,
+        );
+        expect(helper, hasInitialErrorCount);
+
+        expectObservableValue(
+          () => helper.parentHead,
+          emitsInOrder(<dynamic>[
+            emitsError(isFormatException),
+            isHeadWith(tailValue: 'original', count: 1),
+          ]),
+        );
+
+        expect(helper, hasInitialErrorCount);
+
+        ctThrowable.setSingle(NullThrownError());
+        expect(
+          helper,
+          hasCount(
+            parentHead: 3,
+            childHead: 0,
+            parentTail: 1,
+            childTail: 2,
+            create: 0,
+          ),
+        );
+
+        ptThrowable.setSingle(null);
+        expect(
+          helper,
+          hasCount(
+            parentHead: 4,
+            childHead: 0,
+            parentTail: 2,
+            childTail: 2,
+            create: 2,
+          ),
+        );
+
+        ctThrowable.setSingle(null);
+        expect(
+          helper,
+          hasCount(
+            parentHead: 5,
+            childHead: 0,
+            parentTail: 2,
+            childTail: 3,
+            create: 4,
           ),
         );
       });
