@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:mobx/mobx.dart';
 
 import 'utils.dart';
@@ -16,7 +17,7 @@ class BinderStateImpl<T, S> implements BinderState<T> {
     required this.key,
     required ObservableLocator locator,
   }) {
-    _stateTracker = _StateTracker(
+    _stateTracker = _ParentStateTracker(
       locator: locator,
       fn: (source) => computeState(source, _value, _state),
     );
@@ -33,10 +34,10 @@ class BinderStateImpl<T, S> implements BinderState<T> {
         equals = parent.equals,
         disposeValue = parent.disposeValue,
         key = parent.key,
-        _stateTracker = _StateTracker.cloneFrom(
+        _stateTracker = _ChildStateTracker(
           locator: locator,
           parent: parent._stateTracker,
-          parentState: parent,
+          parentBinder: parent,
         );
 
   /// Callback for creating the state that holds the current value.
@@ -44,22 +45,18 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   /// Any observables read within the callback will be tracked. If any dependent
   /// observable values change, the state and value will be recomputed again,
   /// similar to a [Computed] `fn` callback.
-  final S Function(
-    ObservableSource locator,
-    T? currentValue,
-    S? currentState,
-  ) computeState;
+  final StateBuilder<T, S> computeState;
 
   /// Callback that reads the value from the current state.
   ///
   /// This should typically report a read / observation to the surrounding
   /// MobX reactive context, similar to a [Computed.value] call.
-  final T? Function(S computedState) observeFrom;
+  final ObserveCallback<T, S> observeFrom;
 
   /// Optional callback that can be used to clean-up the current state.
   ///
   /// Called during [dispose].
-  final void Function(S computedState)? disposeState;
+  final DisposeCallback<S>? disposeState;
 
   final T? pendingValue;
   final ErrorBuilder<T>? catchError;
@@ -79,7 +76,7 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   bool get _hasState => __stateComputed != null;
 
   S _stateFn() {
-    final newState = unwrapValue(() => _stateTracker.value);
+    final newState = unwrapValue(() => _stateTracker.state);
 
     if (newState != _state) {
       _state = newState;
@@ -92,12 +89,11 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   static bool _defaultEquals<T>(T? newValue, T? oldValue) =>
       newValue == oldValue;
 
-  Computed<T?> get _valueComputed => __valueComputed ??= Computed(
-        _valueFn,
-        equals: equals ?? _defaultEquals,
-        name: 'BinderState<$T>.value',
-      );
-  Computed<T?>? __valueComputed;
+  late final Computed<T?> _valueComputed = Computed(
+    _valueFn,
+    equals: equals ?? _defaultEquals,
+    name: 'BinderState<$T>.value',
+  );
 
   T? _valueFn() {
     final newValue = () {
@@ -173,146 +169,65 @@ typedef _SourceFn<V> = V Function(ObservableSource source);
 
 /// [Computed]-like tracker for state `S` within a [BinderStateImpl].
 ///
-/// Tracks observable dependencies used while creating the state, but not calls
-/// to [ObservableSource.observeKey]. The source observe calls are then tracked
-/// separately to allow sharing of states or creation of different states
-/// based on the values within the provided locator.
-class _StateTracker<S> {
+/// Implements a two-step tracking process.
+/// - First, it tracks all non-locator observable dependencies used while
+/// creating the state. Calls to locator.observe are saved but not tracked.
+/// - The locator.observe calls are then tracked separately in an outer computed
+/// callback, but using the corresponding locator.
+///
+/// The above process allows for sharing of states or creation of different
+/// states based on the values within the locator, while still having
+/// non-locator values tracked and reacted to accordingly.
+abstract class _StateTracker<S> {
   _StateTracker({
     required this.locator,
     required this.fn,
+    required this.keys,
     this.equals,
-  })  : keys = {},
-        _derivedFromParent = false,
-        _isDirty = true {
-    tracker = Computed(
-      () {
-        try {
-          _isDirty = true;
-          return _trackValue();
-        } catch (_) {
-          // rely on observables only if an error occured
-          _updateObservableHash();
-          rethrow;
-        }
-      },
-      name: 'BinderState.tracker-main<$S>',
-      equals: (_, __) => false,
-    );
-    _value = Computed(
-      () {
-        try {
-          if (_isDirty) {
-            // Update due to new value from the tracker
-            return tracker.unwrappedValue;
-          } else {
-            // Update due to observables change
-
-            // subscribe to tracker but don't use its outdated value
-            // should return the cached value without recomputation
-            tracker.unwrappedValue;
-
-            // return fresh value, but don't track to avoid unecessary updates
-            return untracked(() => _trackValue());
-          }
-        } finally {
-          _updateObservableHash();
-          _isDirty = false;
-        }
-      },
-      name: 'BinderState.trackerValue-main<$S>',
-      equals: equals,
-    );
-  }
-
-  _StateTracker.cloneFrom({
-    required this.locator,
-    required _StateTracker<S> parent,
-    required BinderStateImpl<dynamic, S> parentState,
-  })  : keys = Set.of(parent.keys),
-        tracker = parent.tracker,
-        fn = parent.fn,
-        equals = parent.equals,
-        _derivedFromParent = true,
-        _isDirty = false {
-    S _observeOwnValue() {
-      try {
-        _derivedFromParent = false;
-        return _trackValue();
-      } finally {
-        _updateObservableHash();
-      }
-    }
-
-    _value = Computed(
-      () {
-        if (_derivedFromParent && parent._observableHash == _observeHash()) {
-          // If deriving from parent and observables are the same,
-          // watch the tracker and observables
-          late S parentValue;
-          Object? error;
-          try {
-            keys.clear();
-            tracker.unwrappedValue;
-            parentValue = untracked(
-              () => unwrapValue(() {
-                // Force evaluation of parent value.
-                // Ensures previous state and value of parent are available.
-                parentState.tryObserve();
-                return parentState._stateComputed.value;
-              }),
-            );
-          } catch (e) {
-            error = e;
-          } finally {
-            keys.addAll(parent.keys);
-            _updateObservableHash();
-          }
-
-          if (parent._observableHash != _observableHash) {
-            // We don't actually match after trying parent, rely on own value
-            return _observeOwnValue();
-          } else {
-            if (error != null) {
-              throw error;
-            } else {
-              return parentValue;
-            }
-          }
-        } else {
-          return _observeOwnValue();
-        }
-      },
-      equals: equals,
-      name: 'BinderState.trackerValue-clone<$S>',
-    );
-  }
+  });
 
   final ObservableLocator locator;
   final Set<Object> keys;
   final _SourceFn<S> fn;
   final Equals<S>? equals;
-  late final Computed<S> tracker;
 
-  int _observableHash = kEmptyHash;
-  bool _derivedFromParent;
-  bool _isDirty;
+  /// Should return the state that was computed using [computeState]. Generally,
+  /// it should be computed without tracking any locator.observe calls. All
+  /// other observable dependencies should be tracked.
+  ///
+  /// The non-locator state can be read by different state trackers. This allows
+  /// tracking of non-locator dependencies among all trackers, while having
+  /// locator values be based on different locators.
+  S get nonLocatorState;
 
-  S get value => _value.value;
-  late final Computed<S> _value;
+  /// Should return the computed state that tracks both locator and non-locator
+  /// observe calls.
+  S get state;
 
-  late final _ProxyObservableSource _source = _ProxyObservableSource(
-    locator: locator,
-    onObserve: (key) => keys.add(key),
-  );
-
-  S _trackValue() {
+  /// Computes new state.
+  ///
+  /// Does not track any locator.observe calls. Instead, the keys used during
+  /// each observe call are saved in [keys]. Other non-locator observable value
+  /// reads are still tracked.
+  ///
+  /// Note that the locator hash (which uses the updated [keys]) still needs to
+  /// be observed and updated separately.
+  @protected
+  S computeState() {
     keys.clear();
-    return _source.readInBatch(fn); // repopulates keys when observed
+    return _nonLocatorSource.read(fn, onLocatorObserve: (key) => keys.add(key));
   }
 
-  void _updateObservableHash() => _observableHash = _observeHash();
-  int _observeHash() {
+  late final _NonLocatorSource _nonLocatorSource = _NonLocatorSource(locator);
+
+  int get locatorHash => _locatorHash;
+  int _locatorHash = kEmptyHash;
+
+  @protected
+  void observeAndUpdateHash() => _locatorHash = observeHash();
+
+  @protected
+  int observeHash() {
     return hashList(<dynamic>[
       for (final key in keys)
         () {
@@ -326,38 +241,167 @@ class _StateTracker<S> {
   }
 }
 
-class _ProxyObservableSource implements ObservableSource {
-  _ProxyObservableSource({
-    required this.locator,
-    required this.onObserve,
-  });
+class _ParentStateTracker<S> extends _StateTracker<S> {
+  _ParentStateTracker({
+    required ObservableLocator locator,
+    required _SourceFn<S> fn,
+    Equals<S>? equals,
+  }) : super(locator: locator, fn: fn, equals: equals, keys: {});
+
+  bool _isDirty = true;
+
+  @override
+  S get nonLocatorState => _nonLocatorState.unwrappedValue;
+  late final _nonLocatorState = Computed<S>(
+    () {
+      try {
+        _isDirty = true;
+        return computeState();
+      } catch (_) {
+        // Rely on locator values only if an error occured
+        observeAndUpdateHash();
+        rethrow;
+      }
+    },
+    name: '_ParentStateTracker<$S>.nonLocalState',
+    equals: (_, __) => false,
+  );
+
+  @override
+  S get state => _state.value;
+  late final Computed<S> _state = Computed<S>(
+    () {
+      try {
+        if (_isDirty) {
+          // Update due to non-locator state updates. Return fresh state.
+          return nonLocatorState;
+        } else {
+          // Update due to change in locator observable values
+
+          // Subscribe to non-locator state but don't use its outdated value.
+          // This should return the cached value without recomputation.
+          nonLocatorState;
+
+          // Return freshly computed state, but don't track at all to avoid
+          // unecessary updates / recomputations.
+          return untracked(() => computeState());
+        }
+      } finally {
+        observeAndUpdateHash();
+        _isDirty = false;
+      }
+    },
+    name: '_ParentStateTracker<$S>.state',
+    equals: equals,
+  );
+}
+
+class _ChildStateTracker<T, S> extends _StateTracker<S> {
+  _ChildStateTracker({
+    required ObservableLocator locator,
+    required this.parent,
+    required this.parentBinder,
+  }) : super(
+          locator: locator,
+          fn: parent.fn,
+          keys: Set.of(parent.keys),
+          equals: parent.equals,
+        );
+
+  final _StateTracker<S> parent;
+  final BinderStateImpl<T, S> parentBinder;
+  bool _derivedFromParent = true;
+
+  S _observeOwnState() {
+    try {
+      _derivedFromParent = false;
+      return computeState();
+    } finally {
+      observeAndUpdateHash();
+    }
+  }
+
+  @override
+  S get nonLocatorState => parent.nonLocatorState;
+
+  @override
+  S get state => _state.value;
+  late final _state = Computed<S>(
+    () {
+      if (_derivedFromParent && parent.locatorHash == observeHash()) {
+        // If deriving from parent, and locator values are the same,
+        // watch the parent non-locator state and use the parent value.
+        late S parentState;
+        Object? error;
+        try {
+          keys.clear();
+          parent.nonLocatorState;
+          parentState = untracked(
+            () => unwrapValue(() {
+              // Force evaluation of parent value.
+              // Ensures previous state and value of parent are available.
+              parentBinder.tryObserve();
+              return parentBinder._stateComputed.value;
+            }),
+          );
+        } catch (e) {
+          error = e;
+        } finally {
+          keys.addAll(parent.keys);
+          observeAndUpdateHash();
+        }
+
+        // Evaluation of parent state could have changed the locator values
+        if (parent.locatorHash != locatorHash) {
+          // We don't actually match after trying parent, rely on own state
+          return _observeOwnState();
+        } else {
+          if (error != null) {
+            throw error;
+          } else {
+            return parentState;
+          }
+        }
+      } else {
+        return _observeOwnState();
+      }
+    },
+    equals: equals,
+    name: '_ChildStateTracker<$T,$S>.state',
+  );
+}
+
+typedef OnObserveCallback = void Function(Object key);
+
+/// Observable source that uses the provided locator to retrieve values but
+/// ensures no tracking of [ObservableLocator.observeKey] calls. Instead, any
+/// observe calls are forwarded to the [onObserve] callback.
+class _NonLocatorSource implements ObservableSource {
+  _NonLocatorSource(this.locator);
 
   final ObservableLocator locator;
-  final void Function(Object key) onObserve;
 
-  bool isInBatch = false;
+  OnObserveCallback? onObserve;
 
   @override
   T observeKey<T>(Object key) {
-    assert(isInBatch);
-    onObserve(key);
+    onObserve!(key);
     return untracked(() => locator.observeKey(key));
   }
 
   @override
   T? tryObserveKey<T>(Object key) {
-    assert(isInBatch);
-    onObserve(key);
+    onObserve!(key);
     return untracked(() => locator.tryObserveKey(key));
   }
 
-  V readInBatch<V>(_SourceFn<V> fn) {
-    assert(!isInBatch);
+  V read<V>(_SourceFn<V> fn, {required OnObserveCallback onLocatorObserve}) {
+    assert(onObserve == null);
     try {
-      isInBatch = true;
+      onObserve = onLocatorObserve;
       return fn(this);
     } finally {
-      isInBatch = false;
+      onObserve = null;
     }
   }
 }
