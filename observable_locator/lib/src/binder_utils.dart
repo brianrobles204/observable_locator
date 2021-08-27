@@ -22,6 +22,7 @@ Binder<T> singleFuture<T>(
   ErrorBuilder<T>? catchError,
   Equals<T>? equals,
   DisposeCallback<T>? dispose,
+  String? name,
 }) =>
     FutureBinder(
       (_, __, ___) => fn(),
@@ -29,6 +30,7 @@ Binder<T> singleFuture<T>(
       catchError: catchError,
       equals: equals,
       dispose: dispose,
+      name: name,
     );
 
 Binder<T> singleStream<T>(
@@ -37,6 +39,7 @@ Binder<T> singleStream<T>(
   ErrorBuilder<T>? catchError,
   Equals<T>? equals,
   DisposeCallback<T>? dispose,
+  String? name,
 }) =>
     StreamBinder(
       (_, __, ___) => fn(),
@@ -44,4 +47,5 @@ Binder<T> singleStream<T>(
       catchError: catchError,
       equals: equals,
       dispose: dispose,
+      name: name,
     );
