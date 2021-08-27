@@ -1,7 +1,21 @@
 import 'package:meta/meta.dart';
 
 import 'binders.dart';
+import 'impl/binder_state.dart';
 import 'impl/observable_locator.dart';
+
+typedef ErrorBuilder<T> = T Function(Object error);
+typedef Equals<T> = bool Function(T? newValue, T? oldValue);
+typedef DisposeCallback<T> = void Function(T value);
+
+typedef ValueBuilder<T> = T Function(ObservableSource locator, T? oldvalue);
+typedef StateBuilder<T, S> = S Function(
+  ObservableSource locator,
+  T? currentValue,
+  S? currentState,
+);
+
+typedef ObserveCallback<T, S> = T? Function(S computedState);
 
 abstract class Binder<T> {
   const factory Binder(
@@ -16,6 +30,29 @@ abstract class Binder<T> {
 }
 
 abstract class BinderState<T> {
+  static BinderState<T> create<T, S>({
+    required StateBuilder<T, S> computeState,
+    required ObserveCallback<T, S> observeFrom,
+    DisposeCallback<S>? disposeState,
+    T? pendingValue,
+    ErrorBuilder<T>? catchError,
+    Equals<T>? equals,
+    DisposeCallback<T>? disposeValue,
+    required Object key,
+    required ObservableLocator locator,
+  }) =>
+      BinderStateImpl(
+        computeState: computeState,
+        observeFrom: observeFrom,
+        disposeState: disposeState,
+        pendingValue: pendingValue,
+        catchError: catchError,
+        equals: equals,
+        disposeValue: disposeValue,
+        key: key,
+        locator: locator,
+      );
+
   T observe();
   T? tryObserve();
 

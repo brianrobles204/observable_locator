@@ -2,7 +2,6 @@ import 'package:mobx/mobx.dart';
 
 import 'utils.dart';
 import '../api.dart';
-import '../binders.dart';
 import '../exceptions.dart';
 
 class BinderStateImpl<T, S> implements BinderState<T> {

@@ -1,13 +1,6 @@
 import 'package:mobx/mobx.dart';
 
 import 'api.dart';
-import 'impl/binder_state.dart';
-
-typedef ErrorBuilder<T> = T Function(Object error);
-typedef Equals<T> = bool Function(T? newValue, T? oldValue);
-typedef DisposeCallback<T> = void Function(T value);
-
-typedef ValueBuilder<T> = T Function(ObservableSource locator, T? oldvalue);
 
 mixin TypeKeyMixin<T> {
   Object get key {
@@ -31,7 +24,7 @@ class ValueBinder<T> with TypeKeyMixin<T> implements Binder<T> {
 
   @override
   BinderState<T> createState(ObservableLocator locator) =>
-      BinderStateImpl<T, T>(
+      BinderState.create<T, T>(
         computeState: (locator, currentValue, _) => fn(locator, currentValue),
         observeFrom: (computedState) => computedState,
         disposeState: null,
@@ -44,12 +37,6 @@ class ValueBinder<T> with TypeKeyMixin<T> implements Binder<T> {
       );
 }
 
-typedef FutureValueBuilder<T> = Future<T> Function(
-  ObservableSource locator,
-  T? oldValue,
-  Future<T>? oldFuture,
-);
-
 class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
   const FutureBinder(
     this.fn, {
@@ -60,7 +47,7 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
     this.name,
   });
 
-  final FutureValueBuilder<T> fn;
+  final StateBuilder<T, Future<T>> fn;
   final T? pendingValue;
   final ErrorBuilder<T>? catchError;
   final Equals<T>? equals;
@@ -69,7 +56,7 @@ class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
 
   @override
   BinderState<T> createState(ObservableLocator locator) =>
-      BinderStateImpl<T, ObservableFuture<T>>(
+      BinderState.create<T, ObservableFuture<T>>(
         computeState: (locator, currentValue, currentState) {
           final future = fn(locator, currentValue, currentState);
 
@@ -108,7 +95,7 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
     this.name,
   });
 
-  final StreamValueBuilder<T> fn;
+  final StateBuilder<T, Stream<T>> fn;
   final T? pendingValue;
   final ErrorBuilder<T>? catchError;
   final Equals<T>? equals;
@@ -117,7 +104,7 @@ class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
 
   @override
   BinderState<T> createState(ObservableLocator locator) =>
-      BinderStateImpl<T, ObservableStream<T>>(
+      BinderState.create<T, ObservableStream<T>>(
         computeState: (locator, currentValue, currentState) {
           final stream = fn(locator, currentValue, currentState);
 
