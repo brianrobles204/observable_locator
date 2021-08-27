@@ -122,6 +122,17 @@ class ChildrenTestHelper {
   void addChildTailValue({String? value}) =>
       _addValue<Tail>(value, _Gen.child, linkToTail: false);
 
+  /// Value overrides
+
+  void addParentHeadOverride(Binder<Head> binder) =>
+      _binders[_Gen.parent]!.add(binder);
+  void addChildHeadOverride(Binder<Head> binder) =>
+      _binders[_Gen.child]!.add(binder);
+  void addParentTailOverride(Binder<Tail> binder) =>
+      _binders[_Gen.parent]!.add(binder);
+  void addChildTailOverride(Binder<Tail> binder) =>
+      _binders[_Gen.child]!.add(binder);
+
   /// Futures
 
   Completer<String> addParentHeadFuture(

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:mobx/mobx.dart';
 import 'package:observable_locator/observable_locator.dart';
 import 'package:test/test.dart';
 
@@ -557,6 +558,85 @@ void main() {
             create: 14,
           ),
         );
+      });
+      test('without changing final values, if they are equal', () {
+        final equalTailObs = Observable<Tail>(Tail(-1, value: 'equal'));
+        final diffTailObs = Observable<Tail>(Tail(-100, value: 'different'));
+        final shouldBeEqual = Observable<bool>(true);
+
+        final parentHeadObs = helper.whereParentHeadObserves('first');
+        Tail? prevChildTail;
+
+        helper
+          ..addParentTailOverride(single(() => equalTailObs.value))
+          ..addChildTailOverride(Binder(
+            (_, tail) {
+              prevChildTail = tail;
+              return shouldBeEqual.value
+                  ? equalTailObs.value
+                  : diffTailObs.value;
+            },
+          ))
+          ..addParentHeadValue(linkToTail: true)
+          ..initLocators();
+
+        expectObservableValue(
+          () => helper.childHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
+            isHeadWith(tailValue: 'still equal', obsValue: 'first', count: 1),
+            isHeadWith(tailValue: 'still equal', obsValue: 'second', count: 2),
+            isHeadWith(tailValue: 'different', obsValue: 'second', count: 3),
+            isHeadWith(tailValue: 'still diff', obsValue: 'second', count: 5),
+            isHeadWith(tailValue: 'still diff', obsValue: 'third', count: 7),
+            isHeadWith(tailValue: 'still div', obsValue: 'third', count: 9),
+          ]),
+        );
+
+        expectObservableValue(
+          () => helper.parentHead,
+          emitsInOrder(<dynamic>[
+            isHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
+            isHeadWith(tailValue: 'still equal', obsValue: 'first', count: 1),
+            isHeadWith(tailValue: 'still equal', obsValue: 'second', count: 2),
+            isHeadWith(tailValue: 'diverged', obsValue: 'second', count: 4),
+            isHeadWith(tailValue: 'diverged', obsValue: 'third', count: 6),
+            isHeadWith(tailValue: 'still div', obsValue: 'third', count: 8),
+          ]),
+        );
+
+        expect(helper.childHead, same(helper.parentHead));
+        expect(helper, hasCount(parentHead: 1));
+
+        equalTailObs.setSingle(Tail(-2, value: 'still equal'));
+        expect(helper.childHead, same(helper.parentHead));
+        expect(helper, hasCount(parentHead: 2));
+
+        parentHeadObs.setSingle('second');
+        expect(helper.childHead, same(helper.parentHead));
+        expect(helper, hasCount(parentHead: 3));
+
+        shouldBeEqual.setSingle(false);
+        expect(helper.childHead, isNot(same(helper.parentHead)));
+        expect(prevChildTail, same(helper.parentTail));
+        expect(helper, hasCount(parentHead: 4));
+
+        equalTailObs.setSingle(Tail(-3, value: 'diverged'));
+        expect(helper, hasCount(parentHead: 5));
+
+        diffTailObs.setSingle(Tail(-200, value: 'still diff'));
+        expect(helper, hasCount(parentHead: 6));
+
+        parentHeadObs.setSingle('third');
+        expect(helper, hasCount(parentHead: 8)); // both parent & child update
+
+        equalTailObs.setSingle(Tail(-4, value: 'still div'));
+        expect(helper, hasCount(parentHead: 9));
+
+        // Will not converge anymore even if intermediate values are the same
+        shouldBeEqual.setSingle(true);
+        expect(helper.childHead, isNot(same(helper.parentHead)));
+        expect(helper, hasCount(parentHead: 10));
       });
       test('while also changing due to async updates', () async {
         final parentTailSink = helper.addParentTailStream();

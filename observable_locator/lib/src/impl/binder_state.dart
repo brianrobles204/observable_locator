@@ -193,7 +193,7 @@ class _StateTracker<S> {
           return _trackValue();
         } catch (_) {
           // rely on observables only if an error occured
-          _observableHash = _observeHash();
+          _updateObservableHash();
           rethrow;
         }
       },
@@ -217,7 +217,7 @@ class _StateTracker<S> {
             return untracked(() => _trackValue());
           }
         } finally {
-          _observableHash = _observeHash();
+          _updateObservableHash();
           _isDirty = false;
         }
       },
@@ -241,19 +241,19 @@ class _StateTracker<S> {
         _derivedFromParent = false;
         return _trackValue();
       } finally {
-        _observableHash = _observeHash();
+        _updateObservableHash();
       }
     }
 
     _value = Computed(
       () {
-        _observableHash = _observeHash();
-        if (_derivedFromParent && parent._observableHash == _observableHash) {
+        if (_derivedFromParent && parent._observableHash == _observeHash()) {
           // If deriving from parent and observables are the same,
           // watch the tracker and observables
           late S parentValue;
           Object? error;
           try {
+            keys.clear();
             tracker.unwrappedValue;
             parentValue = untracked(
               () => unwrapValue(() {
@@ -265,6 +265,9 @@ class _StateTracker<S> {
             );
           } catch (e) {
             error = e;
+          } finally {
+            keys.addAll(parent.keys);
+            _updateObservableHash();
           }
 
           if (parent._observableHash != _observableHash) {
@@ -309,6 +312,7 @@ class _StateTracker<S> {
     return _source.readInBatch(fn); // repopulates keys when observed
   }
 
+  void _updateObservableHash() => _observableHash = _observeHash();
   int _observeHash() {
     return hashList(<dynamic>[
       for (final key in keys)
