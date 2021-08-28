@@ -218,6 +218,33 @@ void main() {
         throwable.setSingle(null);
         expect(helper.createCount, equals(1));
       });
+      test('while avoiding unecessary updates due to different deps', () {
+        final tailObs = helper.whereParentTailObserves('first');
+        final shouldUseTail = Observable(true);
+
+        helper
+          ..addParentTailValue()
+          ..addParentHeadOverride(Binder<Head>((locator, __) {
+            return shouldUseTail.value
+                ? Head(-1, tailObsValue: locator.observe<Tail>().obsValue)
+                : Head(-2, tailObsValue: 'no update');
+          }))
+          ..initLocators();
+
+        expectAllObservableValues(
+          helper.allLocatorsObserve<Head>(),
+          emitsInOrder(<dynamic>[
+            isHeadWith(count: -1, tailObsValue: 'first'),
+            isHeadWith(count: -2, tailObsValue: 'no update'),
+            isHeadWith(count: -1, tailObsValue: 'third'),
+          ]),
+        );
+
+        shouldUseTail.setSingle(false);
+        tailObs.setSingle('second');
+        tailObs.setSingle('third');
+        shouldUseTail.setSingle(true);
+      });
     });
     group('can override parent values', () {
       test('with minimal recomputation', () {

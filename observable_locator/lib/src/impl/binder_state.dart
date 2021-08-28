@@ -239,6 +239,9 @@ abstract class _StateTracker<S> {
         }(),
     ]);
   }
+
+  @protected
+  int untrackedHash() => untracked(() => observeHash());
 }
 
 class _ParentStateTracker<S> extends _StateTracker<S> {
@@ -328,11 +331,11 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
   S get state => _state.value;
   late final _state = Computed<S>(
     () {
-      if (_derivedFromParent && parent.locatorHash == observeHash()) {
+      if (_derivedFromParent && parent.locatorHash == untrackedHash()) {
         // If deriving from parent, and locator values are the same,
         // watch the parent non-locator state and use the parent value.
         late S parentState;
-        Object? error;
+        Object? parentError;
         try {
           keys.clear();
           parent.nonLocatorState;
@@ -345,19 +348,19 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
             }),
           );
         } catch (e) {
-          error = e;
+          parentError = e;
         } finally {
           keys.addAll(parent.keys);
-          observeAndUpdateHash();
         }
 
         // Evaluation of parent state could have changed the locator values
-        if (parent.locatorHash != locatorHash) {
+        if (parent.locatorHash != untrackedHash()) {
           // We don't actually match after trying parent, rely on own state
           return _observeOwnState();
         } else {
-          if (error != null) {
-            throw error;
+          observeAndUpdateHash();
+          if (parentError != null) {
+            throw parentError;
           } else {
             return parentState;
           }
