@@ -61,8 +61,6 @@ class Head extends Vertex {
 }
 
 enum _Gen { parent, child }
-typedef _HelperMap<T> = Map<_Gen, Map<Type, T>>;
-typedef _HelperObsMap<T> = _HelperMap<Observable<T>>;
 
 class ChildrenTestHelper {
   final Map<_Gen, List<Binder>> _binders = {
@@ -70,7 +68,7 @@ class ChildrenTestHelper {
     _Gen.child: [],
   };
 
-  final _HelperMap<int> _count = {
+  final Map<_Gen, Map<Type, int>> _count = {
     _Gen.parent: {
       Head: 0,
       Tail: 0,
@@ -81,17 +79,17 @@ class ChildrenTestHelper {
     }
   };
 
-  final _HelperObsMap<String> _observables = {
+  final Map<_Gen, Map<Type, Observable<String>>> _observables = {
     _Gen.parent: {},
     _Gen.child: {},
   };
 
-  final _HelperObsMap<String> _mutObservables = {
+  final Map<_Gen, Map<Type, Observable<String>>> _mutObservables = {
     _Gen.parent: {},
     _Gen.child: {},
   };
 
-  final _HelperObsMap<Object?> _throwables = {
+  final Map<_Gen, Map<Type, Observable<Object?>>> _throwables = {
     _Gen.parent: {},
     _Gen.child: {},
   };
@@ -219,7 +217,7 @@ class ChildrenTestHelper {
   }
 
   Observable<O>? _observableOf<T extends Vertex, O>(
-    _HelperObsMap<O> map,
+    Map<_Gen, Map<Type, Observable<O>>> map,
     _Gen gen,
   ) {
     assert(T != Vertex);
@@ -227,7 +225,7 @@ class ChildrenTestHelper {
   }
 
   Observable<String>? _observableValueOf<T extends Vertex>(
-    _HelperObsMap<String> map,
+    Map<_Gen, Map<Type, Observable<String>>> map,
     _Gen gen,
   ) =>
       _observableOf<T, String>(map, gen);
