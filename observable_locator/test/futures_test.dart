@@ -207,7 +207,7 @@ void main() {
       final cancelObservation = Completer<void>();
 
       locator = ObservableLocator([
-        FutureBinder<Disposable>((locator, value, future) {
+        bindFutureValue<Disposable>((locator, value, future) {
           final currentDescription = description.value;
 
           if (value != null && future != null) {
@@ -249,7 +249,7 @@ void main() {
           await Future<void>(() => null);
           return 100;
         }),
-        Binder<String>((locator, _) => locator.observe<int>().toString()),
+        bind<String>((locator) => locator.observe<int>().toString()),
       ]);
 
       expectObservableValue<String>(

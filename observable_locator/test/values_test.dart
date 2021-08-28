@@ -89,7 +89,7 @@ void main() {
 
       locator = ObservableLocator([
         single<int>(() => observable.value),
-        Binder<String>((locator, _) => locator.observe<int>().toString()),
+        bind<String>((locator) => locator.observe<int>().toString()),
       ]);
 
       expectObservableValue<String>(
@@ -123,7 +123,7 @@ void main() {
 
     test('can transitively handle error when type isn\'t registered', () {
       locator = ObservableLocator([
-        Binder<String>((locator, _) => locator.observe<double>().toString()),
+        bind<String>((locator) => locator.observe<double>().toString()),
       ]);
 
       expect(
@@ -140,7 +140,7 @@ void main() {
     test('can transitively handle errors while registering', () {
       locator = ObservableLocator([
         single<double>(() => throw FormatException()),
-        Binder<String>((locator, _) => locator.observe<double>().toString()),
+        bind<String>((locator) => locator.observe<double>().toString()),
       ]);
 
       expect(
@@ -189,7 +189,7 @@ void main() {
           return x.value.toDouble() + y.value.toDouble();
         }),
         single<int>(() => z.value),
-        Binder<String>((locator, _) {
+        bind<String>((locator) {
           stringCount++;
 
           final doubleValue = locator.observe<double>();
@@ -330,7 +330,7 @@ void main() {
       final cancelObservation = Completer<void>();
 
       locator = ObservableLocator([
-        Binder<Disposable>(
+        bindValue<Disposable>(
           (locator, value) =>
               (value ??= Disposable())..description = description.value,
           dispose: (disposable) => disposable.dispose(),
@@ -386,7 +386,7 @@ void main() {
         single<int>(
           () => shouldThrow.value ? throw FormatException() : 100,
         ),
-        Binder<String>((locator, _) => locator.observe<int>().toString()),
+        bind<String>((locator) => locator.observe<int>().toString()),
       ]);
 
       expectObservableValue<String>(

@@ -253,7 +253,7 @@ void main() {
       final cancelObservation = Completer<void>();
 
       locator = ObservableLocator([
-        StreamBinder<Disposable>((locator, value, stream) {
+        bindStreamValue<Disposable>((locator, value, stream) {
           final currentDescription = description.value;
 
           if (value != null && stream != null) {

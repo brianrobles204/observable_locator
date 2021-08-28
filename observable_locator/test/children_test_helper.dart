@@ -272,7 +272,7 @@ class ChildrenTestHelper {
     assert(T == Head || !linkToTail);
 
     _binders[gen]!.add(
-      Binder<T>(
+      bindValue<T>(
         (locator, vertex) {
           _increment<T>(gen);
 
@@ -314,7 +314,7 @@ class ChildrenTestHelper {
     final completer = Completer<String>();
 
     _binders[gen]!.add(
-      FutureBinder<T>(
+      bindFutureValue<T>(
         (locator, vertex, future) {
           _increment<T>(gen);
 
@@ -364,7 +364,7 @@ class ChildrenTestHelper {
     final controller = StreamController<String>.broadcast();
 
     _binders[gen]!.add(
-      StreamBinder<T>(
+      bindStreamValue<T>(
         (locator, vertex, stream) {
           _increment<T>(gen);
 

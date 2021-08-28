@@ -50,14 +50,14 @@ void main() {
           count++;
           return Box(result);
         }),
-        Binder<Disposable>(
-          (locator, _) {
+        bind<Disposable>(
+          (locator) {
             final nameBox = locator.observe<Box<String?>>();
             return Disposable(nameBox.value);
           },
         ),
-        Binder<String?>(
-          (locator, _) => locator.tryObserve<Disposable>()?.name,
+        bind<String?>(
+          (locator) => locator.tryObserve<Disposable>()?.name,
         ),
       ]);
 

@@ -224,7 +224,7 @@ void main() {
 
         helper
           ..addParentTailValue()
-          ..addParentHeadOverride(Binder<Head>((locator, __) {
+          ..addParentHeadOverride(bind<Head>((locator) {
             return shouldUseTail.value
                 ? Head(-1, tailObsValue: locator.observe<Tail>().obsValue)
                 : Head(-2, tailObsValue: 'no update');
@@ -640,7 +640,7 @@ void main() {
 
         helper
           ..addParentTailOverride(single(() => equalTailObs.value))
-          ..addChildTailOverride(Binder(
+          ..addChildTailOverride(bindValue(
             (_, tail) {
               prevChildTail = tail;
               return shouldBeEqual.value
