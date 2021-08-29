@@ -387,15 +387,19 @@ class _NonLocatorSource implements ObservableSource {
   OnObserveCallback? onObserve;
 
   @override
-  T observeKey<T>(Object key) {
-    onObserve!(key);
-    return untracked(() => locator.observeKey(key));
-  }
+  T observeKey<T>(Object key) => _observe(key, () => locator.observeKey(key));
 
   @override
-  T? tryObserveKey<T>(Object key) {
+  T? tryObserveKey<T>(Object key) =>
+      _observe(key, () => locator.tryObserveKey(key));
+
+  T _observe<T>(Object key, T Function() callback) {
+    if (onObserve == null) {
+      throw LocatorUsedOutsideCallbackException(key);
+    }
+
     onObserve!(key);
-    return untracked(() => locator.tryObserveKey(key));
+    return untracked(callback);
   }
 
   V read<V>(_SourceFn<V> fn, {required OnObserveCallback onLocatorObserve}) {

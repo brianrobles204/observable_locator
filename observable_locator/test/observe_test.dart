@@ -116,5 +116,24 @@ void main() {
         throwsA(isA<AssertionError>()),
       );
     });
+    test('throws if using locator source outside the bind callback', () {
+      ObservableSource? source;
+      locator = ObservableLocator([
+        single<int>(() => 100),
+        bind<String>((loc) {
+          source = loc;
+          return 'ignore';
+        }),
+      ]);
+
+      locator.observe<String>(); // force evaluation of bind callback
+
+      expect(source, isNotNull);
+      expect(locator.observe<int>(), equals(100));
+      expect(
+        () => source!.observe<int>(),
+        throwsA(isA<LocatorUsedOutsideCallbackException>()),
+      );
+    });
   });
 }
