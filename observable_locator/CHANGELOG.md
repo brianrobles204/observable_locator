@@ -1,3 +1,8 @@
+## 0.2.4
+
+- Bug fix: Disposing a child locator should not dispose the value if the parent is still using it. Child locators will now only dispose their own values.
+- Bug fix: Pending values will be disposed only when the locator is disposed, as they could reappear again if the future / stream is rebuilt.
+
 ## 0.2.0 - 0.2.3
 
 - Breaking API Changes
