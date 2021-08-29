@@ -98,12 +98,10 @@ packages:
   observable_locator:
     dependency: "direct main"
     description:
-      path: observable_locator
-      ref: HEAD
-      resolved-ref: "71f7f59de0c36f193935a9736aef3421c076a2a6"
-      url: "git@github.com:brianrobles204/observable_locator.git"
-    source: git
-    version: "0.1.0"
+      name: observable_locator
+      url: "https://pub.dartlang.org"
+    source: hosted
+    version: "0.2.2"
   path:
     dependency: transitive
     description:

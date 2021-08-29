@@ -1,13 +1,14 @@
 import 'package:flutter/widgets.dart' hide Action;
 import 'package:mobx/mobx.dart';
 import 'package:nested/nested.dart';
+import 'package:observable_locator/observable_locator.dart';
 
 import 'observable_locator_scope.dart';
 
 typedef Update<T> = T Function(BuildContext context);
 
-class RegisterProxyObservable<T> extends SingleChildStatefulWidget {
-  const RegisterProxyObservable({
+class BindInherited<T> extends SingleChildStatefulWidget {
+  const BindInherited({
     Key? key,
     required this.update,
     this.builder,
@@ -18,12 +19,10 @@ class RegisterProxyObservable<T> extends SingleChildStatefulWidget {
   final TransitionBuilder? builder;
 
   @override
-  _RegisterProxyObservableState<T> createState() =>
-      _RegisterProxyObservableState();
+  _BindInheritedState<T> createState() => _BindInheritedState();
 }
 
-class _RegisterProxyObservableState<T>
-    extends SingleChildState<RegisterProxyObservable<T>> {
+class _BindInheritedState<T> extends SingleChildState<BindInherited<T>> {
   Observable<T>? observable;
 
   @override
@@ -46,9 +45,7 @@ class _RegisterProxyObservableState<T>
     );
 
     return ObservableLocatorScope.child(
-      init: (locator) {
-        locator.register<T>((_) => observable!.value);
-      },
+      create: () => [single<T>(() => observable!.value)],
       builder: widget.builder,
       child: child,
     );
