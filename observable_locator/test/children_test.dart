@@ -742,7 +742,7 @@ void main() {
         expect(helper, hasCount(parentHead: 10));
 
         await pumpEventQueue();
-      }, timeout: Timeout.factor(100));
+      });
       test('while also changing due to async updates', () async {
         final parentTailSink = helper.addParentTailStream();
         final parentHeadSink = helper.addParentHeadStream(
