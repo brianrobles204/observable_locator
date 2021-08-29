@@ -2,6 +2,8 @@ name: flutter_observable_locator
 description: Provides Flutter widgets for integrating with observable_locator
 version: 0.2.0
 
+homepage: https://github.com/brianrobles204/observable_locator
+
 environment:
   sdk: ">=2.12.0 <3.0.0"
   flutter: ">=1.17.0"
