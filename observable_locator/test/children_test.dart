@@ -106,6 +106,23 @@ void main() {
         expect(x2Disposable.disposeCount, equals(1));
         expect(x.children.length, equals(0));
       });
+      test('disposing a child will not dispose parent state', () {
+        final xDisposable = Disposable();
+        final x = parent.createChild([
+          single<Disposable>(
+            () => xDisposable,
+            dispose: (value) => value.dispose(),
+          ),
+        ]);
+
+        final x1 = x.createChild();
+
+        expect(x1.observe<Disposable>().disposeCount, equals(0));
+        expect(x1.observe<Disposable>(), same(x.observe<Disposable>()));
+
+        x1.dispose();
+        expect(x.observe<Disposable>().disposeCount, equals(0));
+      });
     });
     group('can access parent values', () {
       test('that already exist', () {
@@ -630,7 +647,7 @@ void main() {
           ),
         );
       });
-      test('without changing final values, if they are equal', () {
+      test('without changing final values, if they are equal', () async {
         final equalTailObs = Observable<Tail>(Tail(-1, value: 'equal'));
         final diffTailObs = Observable<Tail>(Tail(-100, value: 'different'));
         final shouldBeEqual = Observable<bool>(true);
@@ -651,54 +668,69 @@ void main() {
           ..addParentHeadValue(linkToTail: true)
           ..initLocators();
 
+        // ignore: unawaited_futures
         expectObservableValue(
           () => helper.childHead,
           emitsInOrder(<dynamic>[
-            isHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
-            isHeadWith(tailValue: 'still equal', obsValue: 'first', count: 1),
-            isHeadWith(tailValue: 'still equal', obsValue: 'second', count: 2),
-            isHeadWith(tailValue: 'different', obsValue: 'second', count: 3),
-            isHeadWith(tailValue: 'still diff', obsValue: 'second', count: 5),
-            isHeadWith(tailValue: 'still diff', obsValue: 'third', count: 7),
-            isHeadWith(tailValue: 'still div', obsValue: 'third', count: 9),
+            isNewHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
+            isNewHeadWith(
+                tailValue: 'still equal', obsValue: 'first', count: 1),
+            isNewHeadWith(
+                tailValue: 'still equal', obsValue: 'second', count: 2),
+            isNewHeadWith(tailValue: 'different', obsValue: 'second', count: 3),
+            isNewHeadWith(
+                tailValue: 'still diff', obsValue: 'second', count: 5),
+            isNewHeadWith(tailValue: 'still diff', obsValue: 'third', count: 7),
+            isNewHeadWith(tailValue: 'still div', obsValue: 'third', count: 9),
           ]),
         );
 
+        // ignore: unawaited_futures
         expectObservableValue(
           () => helper.parentHead,
           emitsInOrder(<dynamic>[
-            isHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
-            isHeadWith(tailValue: 'still equal', obsValue: 'first', count: 1),
-            isHeadWith(tailValue: 'still equal', obsValue: 'second', count: 2),
-            isHeadWith(tailValue: 'diverged', obsValue: 'second', count: 4),
-            isHeadWith(tailValue: 'diverged', obsValue: 'third', count: 6),
-            isHeadWith(tailValue: 'still div', obsValue: 'third', count: 8),
+            isNewHeadWith(tailValue: 'equal', obsValue: 'first', count: 0),
+            isNewHeadWith(
+                tailValue: 'still equal', obsValue: 'first', count: 1),
+            isNewHeadWith(
+                tailValue: 'still equal', obsValue: 'second', count: 2),
+            isNewHeadWith(tailValue: 'diverged', obsValue: 'second', count: 4),
+            isNewHeadWith(tailValue: 'diverged', obsValue: 'third', count: 6),
+            isNewHeadWith(tailValue: 'still div', obsValue: 'third', count: 8),
           ]),
         );
 
+        await pumpEventQueue();
         expect(helper.childHead, same(helper.parentHead));
         expect(helper, hasCount(parentHead: 1));
 
         equalTailObs.setSingle(Tail(-2, value: 'still equal'));
+        await pumpEventQueue();
         expect(helper.childHead, same(helper.parentHead));
         expect(helper, hasCount(parentHead: 2));
 
         parentHeadObs.setSingle('second');
+        await pumpEventQueue();
         expect(helper.childHead, same(helper.parentHead));
         expect(helper, hasCount(parentHead: 3));
 
         shouldBeEqual.setSingle(false);
+        await pumpEventQueue();
         expect(helper.childHead, isNot(same(helper.parentHead)));
+        expect(helper.parentHead, isHeadWith(disposeCount: 0));
         expect(prevChildTail, same(helper.parentTail));
         expect(helper, hasCount(parentHead: 4));
 
         equalTailObs.setSingle(Tail(-3, value: 'diverged'));
+        await pumpEventQueue();
         expect(helper, hasCount(parentHead: 5));
 
         diffTailObs.setSingle(Tail(-200, value: 'still diff'));
+        await pumpEventQueue();
         expect(helper, hasCount(parentHead: 6));
 
         parentHeadObs.setSingle('third');
+        await pumpEventQueue();
         expect(helper, hasCount(parentHead: 8)); // both parent & child update
 
         equalTailObs.setSingle(Tail(-4, value: 'still div'));
@@ -708,7 +740,9 @@ void main() {
         shouldBeEqual.setSingle(true);
         expect(helper.childHead, isNot(same(helper.parentHead)));
         expect(helper, hasCount(parentHead: 10));
-      });
+
+        await pumpEventQueue();
+      }, timeout: Timeout.factor(100));
       test('while also changing due to async updates', () async {
         final parentTailSink = helper.addParentTailStream();
         final parentHeadSink = helper.addParentHeadStream(

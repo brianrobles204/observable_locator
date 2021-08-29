@@ -493,6 +493,24 @@ Matcher isHeadWith({
       ],
     );
 
+Matcher isNewHeadWith({
+  int? count,
+  String? value,
+  String? obsValue,
+  String? mutValue,
+  String? tailValue,
+  String? tailObsValue,
+}) =>
+    isHeadWith(
+      count: count,
+      value: value,
+      obsValue: obsValue,
+      mutValue: mutValue,
+      tailValue: tailValue,
+      tailObsValue: tailObsValue,
+      disposeCount: 0,
+    );
+
 Matcher isTailWith<T>({
   int? count,
   String? value,

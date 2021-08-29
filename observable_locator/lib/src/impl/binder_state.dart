@@ -16,10 +16,12 @@ class BinderStateImpl<T, S> implements BinderState<T> {
     required this.disposeValue,
     required this.key,
     required ObservableLocator locator,
-  }) {
+    this.stateEquals,
+  }) : _wasDerivedFromParent = false {
     _stateTracker = _ParentStateTracker(
       locator: locator,
       fn: (source) => computeState(source, _value, _state),
+      equals: stateEquals,
     );
   }
 
@@ -34,6 +36,8 @@ class BinderStateImpl<T, S> implements BinderState<T> {
         equals = parent.equals,
         disposeValue = parent.disposeValue,
         key = parent.key,
+        stateEquals = parent.stateEquals,
+        _wasDerivedFromParent = true,
         _stateTracker = _ChildStateTracker(
           locator: locator,
           parent: parent._stateTracker,
@@ -61,24 +65,26 @@ class BinderStateImpl<T, S> implements BinderState<T> {
   final T? pendingValue;
   final ErrorBuilder<T>? catchError;
   final Equals<T>? equals;
+  final Equals<S>? stateEquals;
   final DisposeCallback<T>? disposeValue;
 
   late final _StateTracker<S> _stateTracker;
   final Object key;
 
+  bool _wasDerivedFromParent;
   bool _hasProducedValue = false;
   T? _value;
   S? _state;
 
-  Computed<S> get _stateComputed =>
-      (__stateComputed ??= Computed(_stateFn, name: 'BinderState<$T>.state'));
-  Computed<S>? __stateComputed;
-  bool get _hasState => __stateComputed != null;
+  late final Computed<S> _stateComputed =
+      Computed(_stateFn, equals: stateEquals, name: 'BinderState<$T>.state');
 
   S _stateFn() {
     final newState = unwrapValue(() => _stateTracker.state);
 
-    if (newState != _state) {
+    final equals = stateEquals ?? _defaultEquals;
+    if (!equals(newState, _state)) {
+      _tryDispose(_state, disposeState);
       _state = newState;
       _hasProducedValue = false;
     }
@@ -124,11 +130,12 @@ class BinderStateImpl<T, S> implements BinderState<T> {
       if (newValue != null && oldValue != null) {
         final equals = this.equals ?? _defaultEquals;
         if (!equals(newValue, oldValue)) {
-          disposeValue?.call(oldValue);
+          _tryDispose(_value, disposeValue);
         }
       }
 
       _value = newValue;
+      _wasDerivedFromParent = _stateTracker.isDerivedFromParent;
       return newValue;
     } catch (e) {
       throw unwrapError(e);
@@ -159,9 +166,14 @@ class BinderStateImpl<T, S> implements BinderState<T> {
 
   @override
   void dispose() {
-    final value = _value;
-    if (value != null) disposeValue?.call(value);
-    if (_hasState) disposeState?.call(untracked<S>(() => _stateComputed.value));
+    _tryDispose(_state, disposeState);
+    _tryDispose(_value, disposeValue);
+  }
+
+  void _tryDispose<D>(D? disposable, DisposeCallback<D>? disposeFn) {
+    if (!_wasDerivedFromParent && disposable != null) {
+      disposeFn?.call(disposable);
+    }
   }
 }
 
@@ -203,6 +215,8 @@ abstract class _StateTracker<S> {
   /// Should return the computed state that tracks both locator and non-locator
   /// observe calls.
   S get state;
+
+  bool get isDerivedFromParent;
 
   /// Computes new state.
   ///
@@ -252,6 +266,9 @@ class _ParentStateTracker<S> extends _StateTracker<S> {
   }) : super(locator: locator, fn: fn, equals: equals, keys: {});
 
   bool _isDirty = true;
+
+  @override
+  bool get isDerivedFromParent => false;
 
   @override
   S get nonLocatorState => _nonLocatorState.unwrappedValue;
@@ -313,11 +330,14 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
 
   final _StateTracker<S> parent;
   final BinderStateImpl<T, S> parentBinder;
-  bool _derivedFromParent = true;
+
+  @override
+  bool get isDerivedFromParent => _isDerivedFromParent;
+  bool _isDerivedFromParent = true;
 
   S _observeOwnState() {
     try {
-      _derivedFromParent = false;
+      _isDerivedFromParent = false;
       return computeState();
     } finally {
       observeAndUpdateHash();
@@ -331,7 +351,7 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
   S get state => _state.value;
   late final _state = Computed<S>(
     () {
-      if (_derivedFromParent && parent.locatorHash == untrackedHash()) {
+      if (_isDerivedFromParent && parent.locatorHash == untrackedHash()) {
         // If deriving from parent, and locator values are the same,
         // watch the parent non-locator state and use the parent value.
         late S parentState;
