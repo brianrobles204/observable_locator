@@ -15,7 +15,10 @@ abstract class Vertex {
   int _disposeCount = 0;
   int get disposeCount => _disposeCount;
 
-  void dispose() => _disposeCount++;
+  void dispose() {
+    _disposeCount++;
+    expect(_disposeCount, equals(1), reason: 'disposed multiple times: $this');
+  }
 
   Map<String, String> get descriptions => {
         'count': count.toString(),

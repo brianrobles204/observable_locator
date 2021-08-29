@@ -129,7 +129,7 @@ class BinderStateImpl<T, S> implements BinderState<T> {
 
       if (newValue != null && oldValue != null) {
         final equals = this.equals ?? _defaultEquals;
-        if (!equals(newValue, oldValue)) {
+        if (!equals(newValue, oldValue) && !equals(pendingValue, _value)) {
           _tryDispose(_value, disposeValue);
         }
       }
