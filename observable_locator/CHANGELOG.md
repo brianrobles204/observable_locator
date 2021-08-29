@@ -1,4 +1,4 @@
-## 0.2.0
+## 0.2.0 - 0.2.2
 
 - Breaking API Changes
     - Types are registered on locator creation by passing in a list of Binder objects. Registering further values after locator creation is no longer supported.

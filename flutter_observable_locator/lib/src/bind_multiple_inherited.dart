@@ -4,7 +4,7 @@ import 'package:nested/nested.dart';
 import 'package:observable_locator/observable_locator.dart';
 
 import 'observable_locator_scope.dart';
-import 'register_proxy_observable.dart';
+import 'bind_inherited.dart';
 
 class UpdateBuilder<T> {
   const UpdateBuilder(this.update);
@@ -20,6 +20,9 @@ class _UpdateState<T> {
   final Update<T> _update;
 
   Observable<T>? _observable;
+
+  Binder<T> createBinder() => single<T>(() => _observable!.value);
+
   void update(BuildContext context) {
     final newValue = _update(context);
     if (_observable != null) {
@@ -28,27 +31,22 @@ class _UpdateState<T> {
       _observable = Observable<T>(newValue);
     }
   }
-
-  void registerOn(WritableObservableLocator locator) {
-    assert(_observable != null);
-    locator.register<T>((oldvalue) => _observable!.value);
-  }
 }
 
 typedef Init<T> = T Function();
 
-/// Registers multiple observables to the surrounding [ObservableLocatorScope].
-/// The values of these observables can be created and updated by relying on
-/// Flutter's [InheritedWidget] system.
+/// Binds multiple inherited widgets to the surrounding
+/// [ObservableLocatorScope]. The values of these observables can be created and
+/// updated by relying on Flutter's [InheritedWidget] reactivity system.
 ///
 /// The exposed value for a chosen type is created by providing an
 /// [UpdateBuilder]. Whenever a dependency of the value updates, the update
 /// builder will also be called again to update the value itself.
 ///
 /// If the value does not depend on a [BuildContext], consider using
-/// [RegisterValue] instead.
-class RegisterMultiProxyObservable extends SingleChildStatefulWidget {
-  /// Registers multiple observables using the provided update builders.
+/// [BindValue] instead.
+class BindMultipleInherited extends SingleChildStatefulWidget {
+  /// Binds multiple inherited widgets using the provided update builders.
   ///
   /// Note that [initUpdateBuilders] is only called once when the widget
   /// is initialized. The initial update builders are then used to create and
@@ -56,7 +54,7 @@ class RegisterMultiProxyObservable extends SingleChildStatefulWidget {
   ///
   /// It is recommended to avoid conditionally including update builders in the
   /// list.
-  const RegisterMultiProxyObservable({
+  const BindMultipleInherited({
     Key? key,
     required this.initUpdateBuilders,
     this.builder,
@@ -67,12 +65,11 @@ class RegisterMultiProxyObservable extends SingleChildStatefulWidget {
   final TransitionBuilder? builder;
 
   @override
-  _RegisterMultiProxyObservableState createState() =>
-      _RegisterMultiProxyObservableState();
+  _BindMultipleInheritedState createState() => _BindMultipleInheritedState();
 }
 
-class _RegisterMultiProxyObservableState
-    extends SingleChildState<RegisterMultiProxyObservable> {
+class _BindMultipleInheritedState
+    extends SingleChildState<BindMultipleInherited> {
   late final List<_UpdateState> updateStates;
 
   @override
@@ -88,11 +85,11 @@ class _RegisterMultiProxyObservableState
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    Action(() {
+    runInAction(() {
       for (final updateState in updateStates) {
         updateState.update(context);
       }
-    })();
+    });
   }
 
   @override
@@ -103,11 +100,7 @@ class _RegisterMultiProxyObservableState
     );
 
     return ObservableLocatorScope.child(
-      init: (locator) {
-        for (final updateState in updateStates) {
-          updateState.registerOn(locator);
-        }
-      },
+      create: () => updateStates.map((state) => state.createBinder()),
       builder: widget.builder,
       child: child,
     );

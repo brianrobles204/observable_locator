@@ -11,8 +11,8 @@ void main() {
 
     await tester.pumpWidget(
       ObservableLocatorScope(
-        init: (locator) {
-          locator.register<String>((_) => observable.value);
+        create: () => {
+          single<String>(() => observable.value),
         },
         child: _ToStringObserver<String>(),
       ),
@@ -20,7 +20,7 @@ void main() {
 
     expect(find.text('first'), findsOneWidget);
 
-    observable.setSingle('second');
+    runInAction(() => observable.value = 'second');
     await tester.pump();
 
     expect(find.text('second'), findsOneWidget);
@@ -28,9 +28,9 @@ void main() {
   testWidgets('throws if shadowing another locator', (tester) async {
     await tester.pumpWidget(
       ObservableLocatorScope(
-        init: _noop,
+        create: _noop,
         child: ObservableLocatorScope(
-          init: _noop,
+          create: _noop,
           child: Container(),
         ),
       ),
@@ -41,7 +41,7 @@ void main() {
   testWidgets('.value throws if locator changes', (tester) async {
     await tester.pumpWidget(
       ObservableLocatorScope.value(
-        ObservableLocator.writable(),
+        ObservableLocator(),
         child: Container(),
       ),
     );
@@ -50,7 +50,7 @@ void main() {
 
     await tester.pumpWidget(
       ObservableLocatorScope.value(
-        ObservableLocator.writable(),
+        ObservableLocator(),
         child: Container(),
       ),
     );
@@ -61,13 +61,13 @@ void main() {
     final main = _Disposable('main');
     final sub = _Disposable('sub');
 
-    InitLocator initWith(_Disposable value) {
-      return (WritableObservableLocator locator) {
-        locator.register<_Disposable>(
-          (_) => value,
-          dispose: (value) => value.dispose(),
-        );
-      };
+    CreateBinders initWith(_Disposable value) {
+      return () => {
+            single<_Disposable>(
+              () => value,
+              dispose: (value) => value.dispose(),
+            ),
+          };
     }
 
     Widget buildWidget({
@@ -76,14 +76,14 @@ void main() {
     }) =>
         ObservableLocatorScope(
           key: mainKey,
-          init: initWith(main),
+          create: initWith(main),
           child: Row(
             textDirection: TextDirection.ltr,
             children: [
               _ToStringObserver<_Disposable>(tag: 'parent'),
               if (showSub)
                 ObservableLocatorScope.child(
-                  init: initWith(sub),
+                  create: initWith(sub),
                   child: _ToStringObserver<_Disposable>(tag: 'child'),
                 ),
             ],
@@ -126,12 +126,12 @@ void main() {
     expect(main.disposeCount, equals(1));
     expect(sub.disposeCount, equals(2));
   });
-  testWidgets('RegisterProxyObservable works', (tester) async {
+  testWidgets('BindInherited works', (tester) async {
     Widget buildWidget(TextDirection textDirection) => ObservableLocatorScope(
-          init: _noop,
+          create: _noop,
           child: Directionality(
             textDirection: textDirection,
-            child: RegisterProxyObservable(
+            child: BindInherited(
               update: (context) => Directionality.of(context),
               child: Observer(
                 builder: (context) =>
@@ -149,7 +149,7 @@ void main() {
 
     expect(find.text(TextDirection.rtl.toString()), findsOneWidget);
   });
-  testWidgets('RegisterMultiProxyObservable works', (tester) async {
+  testWidgets('BindMultipleInherited works', (tester) async {
     const firstOrder = NumericFocusOrder(1);
     const secondOrder = NumericFocusOrder(2);
 
@@ -158,12 +158,12 @@ void main() {
       FocusOrder order,
     ) =>
         ObservableLocatorScope(
-          init: _noop,
+          create: _noop,
           child: Directionality(
             textDirection: textDirection,
             child: FocusTraversalOrder(
               order: order,
-              child: RegisterMultiProxyObservable(
+              child: BindMultipleInherited(
                 initUpdateBuilders: () => [
                   UpdateBuilder<TextDirection>(Directionality.of),
                   UpdateBuilder<FocusOrder>(FocusTraversalOrder.of),
@@ -191,10 +191,10 @@ void main() {
     expect(find.text(TextDirection.rtl.toString()), findsOneWidget);
     expect(find.text(secondOrder.toString()), findsOneWidget);
   });
-  testWidgets('RegisterValue works', (tester) async {
+  testWidgets('BindValue works', (tester) async {
     Widget buildWidget(String content) => ObservableLocatorScope(
-          init: _noop,
-          child: RegisterValue<String>(
+          create: _noop,
+          child: BindValue<String>(
             value: content,
             child: Observer(
               builder: (context) => Text(
@@ -215,7 +215,7 @@ void main() {
   });
 }
 
-void _noop<T>(T _) => null;
+Iterable<Binder> _noop() => <Binder>[];
 
 class _Disposable {
   _Disposable(this.name);
@@ -249,8 +249,4 @@ class _ToStringObserver<T> extends StatelessObserverWidget {
       textDirection: TextDirection.ltr,
     );
   }
-}
-
-extension _ObservableExtensions<T> on Observable<T> {
-  void setSingle(T value) => Action(() => this.value = value).call();
 }

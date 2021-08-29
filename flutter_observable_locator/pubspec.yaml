@@ -1,6 +1,6 @@
 name: flutter_observable_locator
 description: Provides Flutter widgets for integrating with observable_locator
-version: 0.1.0
+version: 0.2.0
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   mobx: ^2.0.4
   nested: ^1.0.0
-  observable_locator: ^0.1.0
+  observable_locator: ^0.2.2
 
 dev_dependencies:
   flutter_mobx: ^2.0.2
@@ -19,9 +19,3 @@ dev_dependencies:
     sdk: flutter
 
 flutter:
-
-dependency_overrides:
-  observable_locator:
-    git:
-      url: git@github.com:brianrobles204/observable_locator.git
-      path: observable_locator

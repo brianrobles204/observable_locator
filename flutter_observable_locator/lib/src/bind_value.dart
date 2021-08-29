@@ -1,11 +1,12 @@
 import 'package:flutter/widgets.dart' hide Action;
 import 'package:mobx/mobx.dart';
 import 'package:nested/nested.dart';
+import 'package:observable_locator/observable_locator.dart';
 
 import 'observable_locator_scope.dart';
 
-class RegisterValue<T> extends SingleChildStatefulWidget {
-  const RegisterValue({
+class BindValue<T> extends SingleChildStatefulWidget {
+  const BindValue({
     Key? key,
     required this.value,
     this.builder,
@@ -16,14 +17,14 @@ class RegisterValue<T> extends SingleChildStatefulWidget {
   final TransitionBuilder? builder;
 
   @override
-  _RegisterValueState<T> createState() => _RegisterValueState();
+  _BindValueState<T> createState() => _BindValueState();
 }
 
-class _RegisterValueState<T> extends SingleChildState<RegisterValue<T>> {
+class _BindValueState<T> extends SingleChildState<BindValue<T>> {
   late final _observable = Observable<T>(widget.value);
 
   @override
-  void didUpdateWidget(covariant RegisterValue<T> oldWidget) {
+  void didUpdateWidget(covariant BindValue<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.value != _observable.value) {
@@ -39,9 +40,7 @@ class _RegisterValueState<T> extends SingleChildState<RegisterValue<T>> {
     );
 
     return ObservableLocatorScope.child(
-      init: (locator) {
-        locator.register<T>((_) => _observable.value);
-      },
+      create: () => [single<T>(() => _observable.value)],
       builder: widget.builder,
       child: child,
     );

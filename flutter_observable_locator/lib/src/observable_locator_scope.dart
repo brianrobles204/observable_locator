@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:nested/nested.dart';
 import 'package:observable_locator/observable_locator.dart';
 
-typedef InitLocator = void Function(WritableObservableLocator locator);
+typedef CreateBinders = Iterable<Binder> Function();
 
 /// A scope that provides an [ObservableLocator] to its widget subtree.
 ///
@@ -17,19 +17,19 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   /// created and disposed) by this widget.
   ///
   /// Values for the locator are registered once on init using the provided
-  /// [init] callback.
+  /// [create] callback.
   ///
   /// This should typically be used as a root scope and must not shadow an
   /// ancestor observable locator scope.
   factory ObservableLocatorScope({
     Key? key,
-    required InitLocator init,
+    required CreateBinders create,
     TransitionBuilder? builder,
     Widget? child,
   }) =>
       _ManagedObservableLocatorScope(
         key: key,
-        init: init,
+        create: create,
         builder: builder,
         child: child,
       );
@@ -65,13 +65,13 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   /// locator tree is allowed,
   factory ObservableLocatorScope.child({
     Key? key,
-    required InitLocator init,
+    required CreateBinders create,
     TransitionBuilder? builder,
     Widget? child,
   }) =>
       _ChildObservableLocatorScope(
         key: key,
-        init: init,
+        create: create,
         builder: builder,
         child: child,
       );
@@ -107,7 +107,7 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   }
 
   @protected
-  ObservableLocator initLocator(BuildContext context);
+  ObservableLocator createLocator(BuildContext context);
 
   @protected
   void updateLocator(BuildContext context, ObservableLocator locator);
@@ -130,7 +130,7 @@ class _ManagedObservableLocatorScope extends ObservableLocatorScope
     with _DisposeLocatorMixin {
   _ManagedObservableLocatorScope({
     Key? key,
-    required this.init,
+    required this.create,
     TransitionBuilder? builder,
     Widget? child,
   }) : super._(
@@ -139,13 +139,13 @@ class _ManagedObservableLocatorScope extends ObservableLocatorScope
           child: child,
         );
 
-  final InitLocator init;
+  final CreateBinders create;
 
   @override
-  ObservableLocator initLocator(BuildContext context) {
+  ObservableLocator createLocator(BuildContext context) {
     assert(_debugCheckIsShadowing(context));
-    final locator = ObservableLocator.writable();
-    init(locator);
+    final binders = create();
+    final locator = ObservableLocator(binders);
     return locator;
   }
 
@@ -171,7 +171,7 @@ class _ValueObservableLocatorScope extends ObservableLocatorScope
   final ObservableLocator locator;
 
   @override
-  ObservableLocator initLocator(BuildContext context) {
+  ObservableLocator createLocator(BuildContext context) {
     assert(_debugCheckIsShadowing(context));
     return locator;
   }
@@ -199,7 +199,7 @@ class _ChildObservableLocatorScope extends ObservableLocatorScope
     with _DisposeLocatorMixin {
   _ChildObservableLocatorScope({
     Key? key,
-    required this.init,
+    required this.create,
     TransitionBuilder? builder,
     Widget? child,
   }) : super._(
@@ -208,15 +208,14 @@ class _ChildObservableLocatorScope extends ObservableLocatorScope
           child: child,
         );
 
-  final InitLocator init;
+  final CreateBinders create;
 
   @override
-  ObservableLocator initLocator(BuildContext context) {
+  ObservableLocator createLocator(BuildContext context) {
     assert(_debugCheckHasLocator(context));
     final parent = ObservableLocatorScope.of(context, listen: false);
-    final locator = parent.createChild();
-    init(locator);
-    return locator;
+    final binders = create();
+    return parent.createChild(binders);
   }
 
   @override
@@ -242,7 +241,7 @@ class _ObservableLocatorScopeState
   @override
   void initState() {
     super.initState();
-    locator = widget.initLocator(context);
+    locator = widget.createLocator(context);
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:observable_locator/observable_locator.dart';
 
 import 'observable_locator_scope.dart';
 
