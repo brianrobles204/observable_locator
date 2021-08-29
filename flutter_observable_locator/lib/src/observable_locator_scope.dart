@@ -16,7 +16,7 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   /// Create a scope that provides an [ObservableLocator] which is managed (i.e.
   /// created and disposed) by this widget.
   ///
-  /// Values for the locator are registered once on init using the provided
+  /// Binders for the locator are created once on init using the provided
   /// [create] callback.
   ///
   /// This should typically be used as a root scope and must not shadow an
