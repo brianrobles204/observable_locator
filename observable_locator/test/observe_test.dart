@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:mobx/mobx.dart';
 import 'package:observable_locator/observable_locator.dart';
 import 'package:test/test.dart';
 
@@ -76,6 +77,49 @@ void main() {
       completer.complete(null);
       await pumpEventQueue();
       expect(count, equals(1));
+
+      cancelObservation.complete();
+    });
+    test('can observe values after a change in locator dependencies', () async {
+      final completer = Completer<void>();
+      final cancelObservation = Completer<void>();
+      final observable = Observable<String?>(null);
+      var count = 0;
+
+      locator = ObservableLocator([
+        singleFuture<Observable<String?>>(() async {
+          await completer.future;
+          return observable;
+        }),
+        bind<String?>(
+          (locator) {
+            count++;
+            return locator.tryObserve<Observable<String?>>()?.value;
+          },
+        ),
+      ]);
+
+      // ignore: unawaited_futures
+      expectObservableValue(
+        () => locator.observe<String?>(),
+        emitsInOrder(<dynamic>[
+          isNull,
+          equals('done'),
+          emitsDone,
+        ]),
+        cancelObservation: cancelObservation.future,
+      );
+
+      await pumpEventQueue();
+      expect(count, equals(1));
+
+      completer.complete();
+      await pumpEventQueue();
+      expect(count, equals(2));
+
+      observable.setSingle('done');
+      await pumpEventQueue();
+      expect(count, equals(3));
 
       cancelObservation.complete();
     });

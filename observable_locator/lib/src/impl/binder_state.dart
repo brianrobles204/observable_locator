@@ -181,15 +181,13 @@ typedef _SourceFn<V> = V Function(ObservableSource source);
 
 /// [Computed]-like tracker for state `S` within a [BinderStateImpl].
 ///
-/// Implements a two-step tracking process.
-/// - First, it tracks all non-locator observable dependencies used while
-/// creating the state. Calls to locator.observe are saved but not tracked.
-/// - The locator.observe calls are then tracked separately in an outer computed
-/// callback, but using the corresponding locator.
+/// To facilitate optional sharing of state between parent and child, the base
+/// class provides methods for computing state, [computeState], without
+/// subscribing to updates from the [ObservableLocator]. Instead, locator
+/// dependencies can be subscribed separately via [observeAndUpdateHash].
 ///
-/// The above process allows for sharing of states or creation of different
-/// states based on the values within the locator, while still having
-/// non-locator values tracked and reacted to accordingly.
+/// This allows for children state whose values are derived from a parent, but
+/// whose values can also be updated based on observing child locators.
 abstract class _StateTracker<S> {
   _StateTracker({
     required this.locator,
@@ -199,23 +197,21 @@ abstract class _StateTracker<S> {
   });
 
   final ObservableLocator locator;
-  final Set<Object> keys;
   final _SourceFn<S> fn;
   final Equals<S>? equals;
 
-  /// Should return the state that was computed using [computeState]. Generally,
-  /// it should be computed without tracking any locator.observe calls. All
-  /// other observable dependencies should be tracked.
-  ///
-  /// The non-locator state can be read by different state trackers. This allows
-  /// tracking of non-locator dependencies among all trackers, while having
-  /// locator values be based on different locators.
-  S get nonLocatorState;
+  final Set<Object> keys;
 
-  /// Should return the computed state that tracks both locator and non-locator
-  /// observe calls.
+  late final _NonLocatorSource _nonLocatorSource = _NonLocatorSource(locator);
+
+  /// Should return the observable computed state that tracks both locator and
+  /// non-locator observe calls.
+  ///
+  /// Typically, this should return the result of [Computed.value], where the
+  /// value is calculated using [computeState] and [observeAndUpdateHash].
   S get state;
 
+  /// Whether the state is derived from a parent [_StateTracker].
   bool get isDerivedFromParent;
 
   /// Computes new state.
@@ -225,39 +221,39 @@ abstract class _StateTracker<S> {
   /// reads are still tracked.
   ///
   /// Note that the locator hash (which uses the updated [keys]) still needs to
-  /// be observed and updated separately.
+  /// be observed and updated separately via [observeAndUpdateHash].
   @protected
   S computeState() {
     keys.clear();
     return _nonLocatorSource.read(fn, onLocatorObserve: (key) => keys.add(key));
   }
 
-  late final _NonLocatorSource _nonLocatorSource = _NonLocatorSource(locator);
-
   int get locatorHash => _locatorHash;
   int _locatorHash = kEmptyHash;
 
   @protected
-  void observeAndUpdateHash() => _locatorHash = observeHash();
+  void observeAndUpdateHash() => _locatorHash = _observeHash();
 
   @protected
-  int observeHash() {
+  int untrackedHash() => untracked(() => _observeHash());
+
+  int _observeHash() {
     return hashList(<dynamic>[
-      for (final key in keys)
-        () {
-          try {
-            return locator.observeKey(key);
-          } catch (e) {
-            return e;
-          }
-        }(),
+      for (final key in keys) ...[key, _locatorValueFrom(key)]
     ]);
   }
 
-  @protected
-  int untrackedHash() => untracked(() => observeHash());
+  dynamic _locatorValueFrom(Object key) {
+    try {
+      return locator.observeKey(key);
+    } catch (e) {
+      return e;
+    }
+  }
 }
 
+/// StateTracker whose state simply updates whenever any locator or non-locator
+/// observable value changes.
 class _ParentStateTracker<S> extends _StateTracker<S> {
   _ParentStateTracker({
     required ObservableLocator locator,
@@ -265,50 +261,17 @@ class _ParentStateTracker<S> extends _StateTracker<S> {
     Equals<S>? equals,
   }) : super(locator: locator, fn: fn, equals: equals, keys: {});
 
-  bool _isDirty = true;
-
   @override
   bool get isDerivedFromParent => false;
-
-  @override
-  S get nonLocatorState => _nonLocatorState.unwrappedValue;
-  late final _nonLocatorState = Computed<S>(
-    () {
-      try {
-        _isDirty = true;
-        return computeState();
-      } catch (_) {
-        // Rely on locator values only if an error occured
-        observeAndUpdateHash();
-        rethrow;
-      }
-    },
-    name: '_ParentStateTracker<$S>.nonLocalState',
-    equals: (_, __) => false,
-  );
 
   @override
   S get state => _state.value;
   late final Computed<S> _state = Computed<S>(
     () {
       try {
-        if (_isDirty) {
-          // Update due to non-locator state updates. Return fresh state.
-          return nonLocatorState;
-        } else {
-          // Update due to change in locator observable values
-
-          // Subscribe to non-locator state but don't use its outdated value.
-          // This should return the cached value without recomputation.
-          nonLocatorState;
-
-          // Return freshly computed state, but don't track at all to avoid
-          // unecessary updates / recomputations.
-          return untracked(() => computeState());
-        }
+        return computeState();
       } finally {
         observeAndUpdateHash();
-        _isDirty = false;
       }
     },
     name: '_ParentStateTracker<$S>.state',
@@ -316,6 +279,14 @@ class _ParentStateTracker<S> extends _StateTracker<S> {
   );
 }
 
+/// StateTracker whose state can be derived from a parent state.
+///
+/// Will try to use parent state if the values of all parent locator observe
+/// calls are equal to the values of all child locator observe calls (by
+/// comparing hash codes).
+///
+/// If locator values are equal, the class will defer to the parent state. If
+/// not, the class will instead manage and track its own state.
 class _ChildStateTracker<T, S> extends _StateTracker<S> {
   _ChildStateTracker({
     required ObservableLocator locator,
@@ -345,20 +316,16 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
   }
 
   @override
-  S get nonLocatorState => parent.nonLocatorState;
-
-  @override
   S get state => _state.value;
   late final _state = Computed<S>(
     () {
-      if (_isDerivedFromParent && parent.locatorHash == untrackedHash()) {
+      if (isDerivedFromParent && parent.locatorHash == untrackedHash()) {
         // If deriving from parent, and locator values are the same,
         // watch the parent non-locator state and use the parent value.
         late S parentState;
         Object? parentError;
         try {
           keys.clear();
-          parent.nonLocatorState;
           parentState = untracked(
             () => unwrapValue(() {
               // Force evaluation of parent value.
@@ -379,6 +346,7 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
           return _observeOwnState();
         } else {
           observeAndUpdateHash();
+          unwrapValue(() => parent.state); // Subscribe to parent state
           if (parentError != null) {
             throw parentError;
           } else {
@@ -413,13 +381,13 @@ class _NonLocatorSource implements ObservableSource {
   T? tryObserveKey<T>(Object key) =>
       _observe(key, () => locator.tryObserveKey(key));
 
-  T _observe<T>(Object key, T Function() callback) {
+  T _observe<T>(Object key, T Function() getValue) {
     if (onObserve == null) {
       throw LocatorUsedOutsideCallbackException(key);
     }
 
     onObserve!(key);
-    return untracked(callback);
+    return untracked(getValue);
   }
 
   V read<V>(_SourceFn<V> fn, {required OnObserveCallback onLocatorObserve}) {
