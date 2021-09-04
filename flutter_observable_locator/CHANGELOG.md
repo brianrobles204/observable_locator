@@ -1,4 +1,4 @@
-## 0.2.0
+## 0.2.0 - 0.2.0+1
 
 - Breaking API Changes
     - Update observable_locator dependency to 0.2.2
