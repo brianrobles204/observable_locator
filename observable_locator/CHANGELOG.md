@@ -1,3 +1,10 @@
+## 0.3.0
+
+- Minor changes but potentially breaking:
+  - ValueBinder et. al. classes now accept a `key` as an argument. They now extend rather than implement `Binder`. Non-breaking if using binder top level utility functions.
+  - tryObserve removed from BinderState interface.
+- Other internal code changes. TryObserve has been rewritten to be in terms of observe, instead of being a separate code path.
+
 ## 0.2.5
 
 - Bug fix: Bind callback updates due to locator value changes will now correctly subscribe to new observable values.
