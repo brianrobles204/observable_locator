@@ -121,8 +121,15 @@ class BinderStateImpl<T, S> implements BinderState<T> {
     return result;
   }
 
+  bool _isNullSafe(T? value) {
+    Type typeOf<N>() => N;
+    final isNullable = T == typeOf<T?>();
+
+    return isNullable || value != null;
+  }
+
   @override
-  T? tryObserve() {
+  T observe() {
     try {
       final oldValue = _value;
       final newValue = _valueComputed.value;
@@ -136,28 +143,15 @@ class BinderStateImpl<T, S> implements BinderState<T> {
 
       _value = newValue;
       _wasDerivedFromParent = _stateTracker.isDerivedFromParent;
-      return newValue;
+
+      if (!_isNullSafe(newValue)) {
+        throw LocatorValueMissingException(key);
+      }
+
+      return newValue as T;
     } catch (e) {
       throw unwrapError(e);
     }
-  }
-
-  bool _isNullSafe(T? value) {
-    Type typeOf<N>() => N;
-    final isNullable = T == typeOf<T?>();
-
-    return isNullable || value != null;
-  }
-
-  @override
-  T observe() {
-    final newValue = tryObserve();
-
-    if (!_isNullSafe(newValue)) {
-      throw LocatorValueMissingException(key);
-    }
-
-    return newValue as T;
   }
 
   @override
@@ -330,8 +324,11 @@ class _ChildStateTracker<T, S> extends _StateTracker<S> {
             () => unwrapValue(() {
               // Force evaluation of parent value.
               // Ensures previous state and value of parent are available.
-              parentBinder.tryObserve();
-              return parentBinder._stateComputed.value;
+              try {
+                parentBinder.observe();
+              } finally {
+                return parentBinder._stateComputed.value;
+              }
             }),
           );
         } catch (e) {

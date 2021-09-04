@@ -51,7 +51,6 @@ abstract class BinderState<T> {
       );
 
   T observe();
-  T? tryObserve();
 
   BinderState<T> cloneWith(ObservableLocator locator);
 
