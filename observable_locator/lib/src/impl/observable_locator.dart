@@ -82,21 +82,16 @@ class ObservableLocatorImpl implements ObservableLocator {
 
   @override
   T? tryObserveKey<T>(Object key) {
-    assert(_debugCheckNotDisposed());
-    final state = _stateFor<T>(key);
-
-    if (state != null) {
-      try {
-        return state.tryObserve();
-      } catch (e) {
-        return null;
-      }
-    } else {
+    try {
+      return observeKey<T>(key);
+    } on LocatorKeyNotFoundException catch (e) {
       assert(() {
-        print('WARNING: Tried to observe $key '
+        print('WARNING: Tried to observe ${e.key} '
             'but no binder was found in $this.');
         return true;
       }());
+      return null;
+    } catch (e) {
       return null;
     }
   }
