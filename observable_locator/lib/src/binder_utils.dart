@@ -10,8 +10,9 @@ Binder<T> single<T>(
   Equals<T>? equals,
   DisposeCallback<T>? dispose,
 }) =>
-    Binder(
+    ValueBinder(
       (_, __) => fn(),
+      key: T,
       catchError: catchError,
       equals: equals,
       dispose: dispose,
@@ -27,6 +28,7 @@ Binder<T> singleFuture<T>(
 }) =>
     FutureBinder(
       (_, __, ___) => fn(),
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -44,6 +46,7 @@ Binder<T> singleStream<T>(
 }) =>
     StreamBinder(
       (_, __, ___) => fn(),
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -57,8 +60,9 @@ Binder<T> bind<T>(
   Equals<T>? equals,
   DisposeCallback<T>? dispose,
 }) =>
-    Binder(
+    ValueBinder(
       (locator, __) => fn(locator),
+      key: T,
       catchError: catchError,
       equals: equals,
       dispose: dispose,
@@ -74,6 +78,7 @@ Binder<T> bindFuture<T>(
 }) =>
     FutureBinder(
       (locator, __, ___) => fn(locator),
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -91,6 +96,7 @@ Binder<T> bindStream<T>(
 }) =>
     StreamBinder(
       (locator, __, ___) => fn(locator),
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -104,7 +110,13 @@ Binder<T> bindValue<T>(
   Equals<T>? equals,
   DisposeCallback<T>? dispose,
 }) =>
-    Binder(fn, catchError: catchError, equals: equals, dispose: dispose);
+    ValueBinder(
+      fn,
+      key: T,
+      catchError: catchError,
+      equals: equals,
+      dispose: dispose,
+    );
 
 Binder<T> bindFutureValue<T>(
   StateBuilder<T, Future<T>> fn, {
@@ -116,6 +128,7 @@ Binder<T> bindFutureValue<T>(
 }) =>
     FutureBinder(
       fn,
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,
@@ -133,6 +146,7 @@ Binder<T> bindStreamValue<T>(
 }) =>
     StreamBinder(
       fn,
+      key: T,
       pendingValue: pendingValue,
       catchError: catchError,
       equals: equals,

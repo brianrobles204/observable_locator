@@ -1,6 +1,5 @@
 import 'package:meta/meta.dart';
 
-import 'binders.dart';
 import 'impl/binder_state.dart';
 import 'impl/observable_locator.dart';
 
@@ -18,15 +17,13 @@ typedef StateBuilder<T, S> = S Function(
 typedef ObserveCallback<T, S> = T? Function(S computedState);
 
 abstract class Binder<T> {
-  const factory Binder(
-    ValueBuilder<T> fn, {
-    ErrorBuilder<T>? catchError,
-    Equals<T>? equals,
-    DisposeCallback<T>? dispose,
-  }) = ValueBinder;
+  const Binder();
 
   Object get key;
   BinderState<T> createState(ObservableLocator locator);
+
+  @nonVirtual
+  Type get bindType => T;
 }
 
 abstract class BinderState<T> {

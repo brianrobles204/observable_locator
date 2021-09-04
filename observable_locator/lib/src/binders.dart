@@ -2,20 +2,17 @@ import 'package:mobx/mobx.dart';
 
 import 'api.dart';
 
-mixin TypeKeyMixin<T> {
-  Object get key {
-    assert(T != dynamic, 'Tried to use dynamic type as key');
-    return T;
-  }
-}
-
-class ValueBinder<T> with TypeKeyMixin<T> implements Binder<T> {
+class ValueBinder<T> extends Binder<T> {
   const ValueBinder(
     this.fn, {
+    required this.key,
     this.catchError,
     this.equals,
     this.dispose,
   });
+
+  @override
+  final Object key;
 
   final ValueBuilder<T> fn;
   final ErrorBuilder<T>? catchError;
@@ -37,15 +34,19 @@ class ValueBinder<T> with TypeKeyMixin<T> implements Binder<T> {
       );
 }
 
-class FutureBinder<T> with TypeKeyMixin<T> implements Binder<T> {
+class FutureBinder<T> extends Binder<T> {
   const FutureBinder(
     this.fn, {
+    required this.key,
     this.pendingValue,
     this.catchError,
     this.equals,
     this.dispose,
     this.name,
   });
+
+  @override
+  final Object key;
 
   final StateBuilder<T, Future<T>> fn;
   final T? pendingValue;
@@ -85,15 +86,19 @@ typedef StreamValueBuilder<T> = Stream<T> Function(
   Stream<T>? oldStream,
 );
 
-class StreamBinder<T> with TypeKeyMixin<T> implements Binder<T> {
+class StreamBinder<T> extends Binder<T> {
   const StreamBinder(
     this.fn, {
+    required this.key,
     this.pendingValue,
     this.catchError,
     this.equals,
     this.dispose,
     this.name,
   });
+
+  @override
+  final Object key;
 
   final StateBuilder<T, Stream<T>> fn;
   final T? pendingValue;

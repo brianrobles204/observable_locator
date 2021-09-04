@@ -16,6 +16,7 @@ class ObservableLocatorImpl implements ObservableLocator {
 
   void _initStates(Iterable<Binder> binders) {
     for (final binder in binders) {
+      assert(binder.bindType != dynamic, 'Tried to register dynamic type');
       if (_states.containsKey(binder.key)) {
         throw LocatorValueAlreadyRegisteredException(binder.key);
       }
