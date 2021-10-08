@@ -264,20 +264,27 @@ class _Disposable {
   String toString() => name;
 }
 
+typedef _ToStringCallback<T> = String Function(T value);
+
 class _ToStringObserver<T> extends StatelessObserverWidget {
   const _ToStringObserver({
     Key? key,
     this.tag,
-  }) : super(key: key);
+    _ToStringCallback<T>? toStringCallback,
+  })  : toStringCallback = toStringCallback ?? _defaultToString,
+        super(key: key);
 
   final String? tag;
+  final _ToStringCallback<T> toStringCallback;
+
+  static String _defaultToString<T>(T value) => value.toString();
 
   @override
   Widget build(BuildContext context) {
     final tagText = tag != null ? '$tag: ' : '';
 
     return Text(
-      tagText + context.observe<T>().toString(),
+      tagText + toStringCallback(context.observe<T>()),
       textDirection: TextDirection.ltr,
     );
   }
