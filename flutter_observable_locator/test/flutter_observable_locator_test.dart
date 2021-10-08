@@ -126,6 +126,38 @@ void main() {
     expect(main.disposeCount, equals(1));
     expect(sub.disposeCount, equals(2));
   });
+  testWidgets('.child can be reparented with globalKey', (tester) async {
+    final childKey = GlobalKey();
+    final parentLocator = ObservableLocator([single<int>(() => 100)]);
+    Widget buildWidget({required bool insertGap}) {
+      return ObservableLocatorScope.value(
+        parentLocator,
+        child: Container(
+          child: insertGap
+              ? Container(
+                  child: ObservableLocatorScope.child(
+                    key: childKey,
+                    create: () =>
+                        [bind<String>((loc) => loc.observe<int>().toString())],
+                    child: _ToStringObserver<String>(),
+                  ),
+                )
+              : ObservableLocatorScope.child(
+                  key: childKey,
+                  create: () =>
+                      [bind<String>((loc) => loc.observe<int>().toString())],
+                  child: _ToStringObserver<String>(),
+                ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget(insertGap: true));
+    expect(find.text('100'), findsOneWidget);
+
+    await tester.pumpWidget(buildWidget(insertGap: false));
+    expect(find.text('100'), findsOneWidget);
+  });
   testWidgets('BindInherited works', (tester) async {
     Widget buildWidget(TextDirection textDirection) => ObservableLocatorScope(
           create: _noop,
