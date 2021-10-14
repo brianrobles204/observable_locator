@@ -110,10 +110,13 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   ObservableLocator createLocator(BuildContext context);
 
   @protected
-  void updateLocator(BuildContext context, ObservableLocator locator);
+  bool isLocatorValid(BuildContext context, ObservableLocator locator);
 
   @protected
-  void dispose(BuildContext context, ObservableLocator locator);
+  void onLocatorUse(BuildContext context, ObservableLocator locator);
+
+  @protected
+  void disposeLocator(BuildContext context, ObservableLocator locator);
 
   @override
   _ObservableLocatorScopeState createState() => _ObservableLocatorScopeState();
@@ -121,7 +124,7 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
 
 mixin _DisposeLocatorMixin on ObservableLocatorScope {
   @override
-  void dispose(BuildContext context, ObservableLocator locator) {
+  void disposeLocator(BuildContext context, ObservableLocator locator) {
     locator.dispose();
   }
 }
@@ -150,7 +153,12 @@ class _ManagedObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  void updateLocator(BuildContext context, ObservableLocator locator) {
+  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
+    return !_hasParentLocator(context);
+  }
+
+  @override
+  void onLocatorUse(BuildContext context, ObservableLocator locator) {
     assert(_debugCheckIsShadowing(context));
   }
 }
@@ -177,7 +185,12 @@ class _ValueObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  void updateLocator(BuildContext context, ObservableLocator locator) {
+  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
+    return !_hasParentLocator(context) && locator == this.locator;
+  }
+
+  @override
+  void onLocatorUse(BuildContext context, ObservableLocator locator) {
     assert(_debugCheckIsShadowing(context));
     assert(() {
       if (locator != this.locator) {
@@ -219,7 +232,13 @@ class _ChildObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  void updateLocator(BuildContext context, ObservableLocator locator) {
+  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
+    return _hasParentLocator(context) &&
+        ObservableLocatorScope.of(context) == locator.parent;
+  }
+
+  @override
+  void onLocatorUse(BuildContext context, ObservableLocator locator) {
     assert(_debugCheckHasLocator(context));
 
     final newParent = ObservableLocatorScope.of(context);
@@ -245,9 +264,18 @@ class _ObservableLocatorScopeState
   }
 
   @override
+  void activate() {
+    super.activate();
+    if (!widget.isLocatorValid(context, locator)) {
+      widget.disposeLocator(context, locator);
+      locator = widget.createLocator(context);
+    }
+  }
+
+  @override
   void dispose() {
     super.dispose();
-    widget.dispose(context, locator);
+    widget.disposeLocator(context, locator);
   }
 
   @override
@@ -257,7 +285,7 @@ class _ObservableLocatorScopeState
       '$runtimeType used outside of Nested must specify a child',
     );
 
-    widget.updateLocator(context, locator);
+    widget.onLocatorUse(context, locator);
 
     return _InheritedObservableLocatorScope(
       locator: locator,
@@ -283,11 +311,15 @@ class _InheritedObservableLocatorScope extends InheritedWidget {
       locator != oldWidget.locator;
 }
 
+bool _hasParentLocator(BuildContext context) {
+  final element = context.getElementForInheritedWidgetOfExactType<
+      _InheritedObservableLocatorScope>();
+  return element != null;
+}
+
 bool _debugCheckHasLocator(BuildContext context) {
   assert(() {
-    final element = context.getElementForInheritedWidgetOfExactType<
-        _InheritedObservableLocatorScope>();
-    if (element == null) {
+    if (!_hasParentLocator(context)) {
       throw FlutterError.fromParts(<DiagnosticsNode>[
         ErrorSummary('No ObservableLocatorScope found.'),
         ErrorDescription(
@@ -302,9 +334,7 @@ bool _debugCheckHasLocator(BuildContext context) {
 
 bool _debugCheckIsShadowing(BuildContext context) {
   assert(() {
-    final element = context.getElementForInheritedWidgetOfExactType<
-        _InheritedObservableLocatorScope>();
-    if (element != null) {
+    if (_hasParentLocator(context)) {
       throw FlutterError.fromParts(<DiagnosticsNode>[
         ErrorSummary(
             'This ObservableLocatorScope will shadow an existing locator.'),

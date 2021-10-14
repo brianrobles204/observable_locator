@@ -139,14 +139,20 @@ void main() {
                     key: childKey,
                     create: () =>
                         [bind<String>((loc) => loc.observe<int>().toString())],
-                    child: _ToStringObserver<String>(),
+                    child: ObservableLocatorScope.child(
+                      create: () => [],
+                      child: _ToStringObserver<String>(),
+                    ),
                   ),
                 )
               : ObservableLocatorScope.child(
                   key: childKey,
                   create: () =>
                       [bind<String>((loc) => loc.observe<int>().toString())],
-                  child: _ToStringObserver<String>(),
+                  child: ObservableLocatorScope.child(
+                    create: () => [],
+                    child: _ToStringObserver<String>(),
+                  ),
                 ),
         ),
       );
@@ -157,6 +163,95 @@ void main() {
 
     await tester.pumpWidget(buildWidget(insertGap: false));
     expect(find.text('100'), findsOneWidget);
+  });
+  testWidgets('.child can move in branch without throwing', (tester) async {
+    var disposeCount = 0;
+
+    final disposeIntBinder =
+        single<int>(() => 100, dispose: (_) => disposeCount++);
+    final disposeStringBinder = bind<String>(
+      (loc) => loc.observe<int>().toString(),
+      dispose: (_) => disposeCount++,
+    );
+
+    final parentLocator = ObservableLocator([disposeIntBinder]);
+    Widget buildWidget({required bool insertGap}) {
+      return ObservableLocatorScope.value(
+        parentLocator,
+        child: Container(
+          child: insertGap
+              ? Stack(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    ObservableLocatorScope.child(
+                      create: () => [disposeIntBinder],
+                      child: ObservableLocatorScope.child(
+                        create: () => [disposeStringBinder],
+                        child: _ToStringObserver<String>(),
+                      ),
+                    ),
+                  ],
+                )
+              : ObservableLocatorScope.child(
+                  create: () => [disposeIntBinder],
+                  child: ObservableLocatorScope.child(
+                    create: () => [disposeStringBinder],
+                    child: _ToStringObserver<String>(),
+                  ),
+                ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget(insertGap: true));
+    expect(disposeCount, equals(0));
+
+    await tester.pumpWidget(buildWidget(insertGap: false));
+    expect(disposeCount, equals(2));
+
+    await tester.pumpWidget(buildWidget(insertGap: true));
+    expect(disposeCount, equals(4));
+  });
+  testWidgets('regression test: works with WidgetsApp overlay', (tester) async {
+    var disposeCount = 0;
+
+    final disposeCountBinder =
+        single<int>(() => 100, dispose: (_) => disposeCount++);
+    final disposeStringBinder = bind<String>(
+      (loc) => loc.observe<int>().toString(),
+      dispose: (_) => disposeCount++,
+    );
+
+    final parentLocator = ObservableLocator([disposeCountBinder]);
+
+    Widget buildWidget({required bool showPerformanceOverlay}) {
+      return ObservableLocatorScope.value(
+        parentLocator,
+        child: WidgetsApp(
+          color: Color(0xFFFFFFFF),
+          showPerformanceOverlay: showPerformanceOverlay,
+          builder: (context, navigator) => ObservableLocatorScope.child(
+            create: () => [disposeCountBinder],
+            child: navigator,
+          ),
+          onGenerateRoute: (settings) => PageRouteBuilder(
+            pageBuilder: (context, _, __) => ObservableLocatorScope.child(
+              create: () => [disposeStringBinder],
+              child: _ToStringObserver<String>(),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget(showPerformanceOverlay: true));
+    expect(disposeCount, equals(0));
+
+    await tester.pumpWidget(buildWidget(showPerformanceOverlay: false));
+    expect(disposeCount, equals(2));
+
+    await tester.pumpWidget(buildWidget(showPerformanceOverlay: true));
+    expect(disposeCount, equals(4));
   });
   testWidgets('BindInherited works', (tester) async {
     Widget buildWidget(TextDirection textDirection) => ObservableLocatorScope(
