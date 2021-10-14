@@ -1,9 +1,11 @@
-## 0.2.0 - 0.2.0+1
+## 0.2.0 - 0.2.0+3
 
 - Breaking API Changes
     - Update observable_locator dependency to 0.2.2
     - Change creation callback APIs to match ObservableLocator API (registering of binders during construction)
     - Rename 'register' classes to 'bind' classes to match ObservableLocator terminology
+- ### 0.2.0+3
+  - Fix throwing due to change in parent locator between rebuilds
 
 ## 0.1.0
 
