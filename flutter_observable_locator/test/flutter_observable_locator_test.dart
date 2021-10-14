@@ -128,7 +128,17 @@ void main() {
   });
   testWidgets('.child can be reparented with globalKey', (tester) async {
     final childKey = GlobalKey();
-    final parentLocator = ObservableLocator([single<int>(() => 100)]);
+    var disposeCount = 0;
+
+    final disposeIntBinder =
+        single<int>(() => 100, dispose: (_) => disposeCount++);
+    final disposeStringBinder = bind<String>(
+      (loc) => loc.observe<int>().toString(),
+      dispose: (_) => disposeCount++,
+    );
+
+    final parentLocator = ObservableLocator([disposeIntBinder]);
+
     Widget buildWidget({required bool insertGap}) {
       return ObservableLocatorScope.value(
         parentLocator,
@@ -137,20 +147,18 @@ void main() {
               ? Container(
                   child: ObservableLocatorScope.child(
                     key: childKey,
-                    create: () =>
-                        [bind<String>((loc) => loc.observe<int>().toString())],
+                    create: () => [disposeStringBinder],
                     child: ObservableLocatorScope.child(
-                      create: () => [],
+                      create: () => [disposeIntBinder],
                       child: _ToStringObserver<String>(),
                     ),
                   ),
                 )
               : ObservableLocatorScope.child(
                   key: childKey,
-                  create: () =>
-                      [bind<String>((loc) => loc.observe<int>().toString())],
+                  create: () => [disposeStringBinder],
                   child: ObservableLocatorScope.child(
-                    create: () => [],
+                    create: () => [disposeIntBinder],
                     child: _ToStringObserver<String>(),
                   ),
                 ),
@@ -160,9 +168,11 @@ void main() {
 
     await tester.pumpWidget(buildWidget(insertGap: true));
     expect(find.text('100'), findsOneWidget);
+    expect(disposeCount, isZero);
 
     await tester.pumpWidget(buildWidget(insertGap: false));
     expect(find.text('100'), findsOneWidget);
+    expect(disposeCount, isZero);
   });
   testWidgets('.child can move in branch without throwing', (tester) async {
     var disposeCount = 0;
