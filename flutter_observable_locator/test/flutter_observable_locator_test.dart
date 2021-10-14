@@ -145,21 +145,25 @@ void main() {
         child: Container(
           child: insertGap
               ? Container(
-                  child: ObservableLocatorScope.child(
+                  child: Container(
                     key: childKey,
+                    child: ObservableLocatorScope.child(
+                      create: () => [disposeStringBinder],
+                      child: ObservableLocatorScope.child(
+                        create: () => [disposeIntBinder],
+                        child: _ToStringObserver<String>(),
+                      ),
+                    ),
+                  ),
+                )
+              : Container(
+                  key: childKey,
+                  child: ObservableLocatorScope.child(
                     create: () => [disposeStringBinder],
                     child: ObservableLocatorScope.child(
                       create: () => [disposeIntBinder],
                       child: _ToStringObserver<String>(),
                     ),
-                  ),
-                )
-              : ObservableLocatorScope.child(
-                  key: childKey,
-                  create: () => [disposeStringBinder],
-                  child: ObservableLocatorScope.child(
-                    create: () => [disposeIntBinder],
-                    child: _ToStringObserver<String>(),
                   ),
                 ),
         ),
@@ -225,14 +229,14 @@ void main() {
   testWidgets('regression test: works with WidgetsApp overlay', (tester) async {
     var disposeCount = 0;
 
-    final disposeCountBinder =
+    final disposeIntBinder =
         single<int>(() => 100, dispose: (_) => disposeCount++);
     final disposeStringBinder = bind<String>(
       (loc) => loc.observe<int>().toString(),
       dispose: (_) => disposeCount++,
     );
 
-    final parentLocator = ObservableLocator([disposeCountBinder]);
+    final parentLocator = ObservableLocator([disposeIntBinder]);
 
     Widget buildWidget({required bool showPerformanceOverlay}) {
       return ObservableLocatorScope.value(
@@ -241,13 +245,29 @@ void main() {
           color: Color(0xFFFFFFFF),
           showPerformanceOverlay: showPerformanceOverlay,
           builder: (context, navigator) => ObservableLocatorScope.child(
-            create: () => [disposeCountBinder],
+            create: () => [disposeIntBinder],
             child: navigator,
           ),
           onGenerateRoute: (settings) => PageRouteBuilder(
             pageBuilder: (context, _, __) => ObservableLocatorScope.child(
               create: () => [disposeStringBinder],
-              child: _ToStringObserver<String>(),
+              child: ObservableLocatorScope.child(
+                create: () => [
+                  bind<_Disposable>(
+                    (locator) => _Disposable(locator.observe()),
+                    dispose: (_) => disposeCount++,
+                  ),
+                ],
+                child: Column(
+                  children: [
+                    _ToStringObserver<int>(),
+                    _ToStringObserver<String>(),
+                    _ToStringObserver<_Disposable>(
+                      toStringCallback: (disposable) => disposable.name,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -256,12 +276,15 @@ void main() {
 
     await tester.pumpWidget(buildWidget(showPerformanceOverlay: true));
     expect(disposeCount, equals(0));
+    expect(find.text('100'), findsNWidgets(3));
 
     await tester.pumpWidget(buildWidget(showPerformanceOverlay: false));
-    expect(disposeCount, equals(2));
+    expect(disposeCount, equals(3));
+    expect(find.text('100'), findsNWidgets(3));
 
     await tester.pumpWidget(buildWidget(showPerformanceOverlay: true));
-    expect(disposeCount, equals(4));
+    expect(disposeCount, equals(6));
+    expect(find.text('100'), findsNWidgets(3));
   });
   testWidgets('BindInherited works', (tester) async {
     Widget buildWidget(TextDirection textDirection) => ObservableLocatorScope(

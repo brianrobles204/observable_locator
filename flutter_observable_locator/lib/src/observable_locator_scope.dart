@@ -110,10 +110,10 @@ abstract class ObservableLocatorScope extends SingleChildStatefulWidget {
   ObservableLocator createLocator(BuildContext context);
 
   @protected
-  bool isLocatorValid(BuildContext context, ObservableLocator locator);
-
-  @protected
-  void onLocatorUse(BuildContext context, ObservableLocator locator);
+  ObservableLocator updateLocator(
+    BuildContext context,
+    ObservableLocator locator,
+  );
 
   @protected
   void disposeLocator(BuildContext context, ObservableLocator locator);
@@ -153,13 +153,12 @@ class _ManagedObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
-    return !_hasParentLocator(context);
-  }
-
-  @override
-  void onLocatorUse(BuildContext context, ObservableLocator locator) {
+  ObservableLocator updateLocator(
+    BuildContext context,
+    ObservableLocator locator,
+  ) {
     assert(_debugCheckIsShadowing(context));
+    return locator;
   }
 }
 
@@ -185,12 +184,10 @@ class _ValueObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
-    return !_hasParentLocator(context) && locator == this.locator;
-  }
-
-  @override
-  void onLocatorUse(BuildContext context, ObservableLocator locator) {
+  ObservableLocator updateLocator(
+    BuildContext context,
+    ObservableLocator locator,
+  ) {
     assert(_debugCheckIsShadowing(context));
     assert(() {
       if (locator != this.locator) {
@@ -205,6 +202,8 @@ class _ValueObservableLocatorScope extends ObservableLocatorScope
       }
       return true;
     }());
+
+    return locator;
   }
 }
 
@@ -232,24 +231,26 @@ class _ChildObservableLocatorScope extends ObservableLocatorScope
   }
 
   @override
-  bool isLocatorValid(BuildContext context, ObservableLocator locator) {
-    return _hasParentLocator(context) &&
-        ObservableLocatorScope.of(context) == locator.parent;
-  }
-
-  @override
-  void onLocatorUse(BuildContext context, ObservableLocator locator) {
+  ObservableLocator updateLocator(
+    BuildContext context,
+    ObservableLocator locator,
+  ) {
     assert(_debugCheckHasLocator(context));
 
     final newParent = ObservableLocatorScope.of(context);
     if (newParent != locator.parent) {
-      throw FlutterError.fromParts(<DiagnosticsNode>[
-        ErrorSummary('''Locator above this widget in the widget tree '''
-            '''doesn't match this locator's parent'''),
-        ErrorDescription('The ObservableLocatorScope above this widget in the '
-            'widget tree has a locator that does not match this locator\'s parent'),
-      ]);
+      assert(() {
+        print('The ObservableLocatorScope above this widget in the widget tree '
+            'has a locator@${newParent.hashCode} that does not match this '
+            'locator\'s parent@${locator.parent.hashCode}. Recreating the '
+            'locator@${locator.hashCode} $locator.');
+        return true;
+      }());
+
+      return createLocator(context);
     }
+
+    return locator;
   }
 }
 
@@ -261,15 +262,6 @@ class _ObservableLocatorScopeState
   void initState() {
     super.initState();
     locator = widget.createLocator(context);
-  }
-
-  @override
-  void activate() {
-    super.activate();
-    if (!widget.isLocatorValid(context, locator)) {
-      widget.disposeLocator(context, locator);
-      locator = widget.createLocator(context);
-    }
   }
 
   @override
@@ -285,7 +277,7 @@ class _ObservableLocatorScopeState
       '$runtimeType used outside of Nested must specify a child',
     );
 
-    widget.onLocatorUse(context, locator);
+    locator = widget.updateLocator(context, locator);
 
     return _InheritedObservableLocatorScope(
       locator: locator,
