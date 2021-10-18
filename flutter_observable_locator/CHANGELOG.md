@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Add `LocatorReactionStateMixin`, a convenience mixin that provides MobX reaction functions which can rely on the surrounding [ObservableLocatorScope].
+
 ## 0.2.0 - 0.2.0+4
 
 - Breaking API Changes
