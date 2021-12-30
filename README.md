@@ -123,9 +123,10 @@ final user = locator.observe<User>();
 
 ### Error handling
 
-For future and stream valuse, if the `pendingValue` is `null` but the value's 
-type is a non-null, then calling `observe()` will throw if the underlying 
-stream / future hasn't emitted a value yet.
+For future and stream values, an optional `pendingValue` can be provided. If
+`pendingValue` is `null` (the default) but the value's type is a non-null, 
+then calling `observe()` will throw if the underlying stream / future hasn't 
+emitted a value yet.
 
 Additionally, if any errors are throws in the binder callback function for a 
 type `T`, then that error is bubbled up and calling `observe<T>()` will also 
