@@ -6,7 +6,7 @@ the API and create reactive dependencies.
 `Observable Locator` implements a service locator pattern for performing
 dependency injection, similar to [get_it](https://pub.dev/packages/get_it) 
 or [provider](https://pub.dev/packages/provider). However, like `provider`,
-this package can be used to create dependencies that are reactive, using
+this package can be used to create dependencies that are *reactive*, using
 MobX as the underlying system for reactivity. The API also makes it easy 
 to create `async` dependencies (on futures & streams) with minimal boilerplate.
 
@@ -39,13 +39,13 @@ final age = locator.observe<int>();
 ```
 
 So far, things are similar to `get_it`. The key difference is that the
-values inside the locator can change over time, and that values can depend
+values inside the locator can *change* over time, and that values can depend
 on other changing (i.e. *observable*) values. 
 
-Under the hood, the locator uses `MobX` to implement this
-reactivity. If you're unfamiliar with MobX, I suggest you read the 
+Under the hood, the locator uses MobX to implement this
+reactivity. If you're unfamiliar with the library, I suggest you read the 
 [MobX documentation](https://mobx.netlify.app/). In a nutshell, MobX has
-a concept of `observable` values and `reactions` with callback functions. 
+a concept of `observable` values, and `reactions` with callback functions. 
 When an observable value changes, any reactions that use the observable 
 value are rerun. These reactions can have various side effects, from 
 recomputing another value to rebuilding a Widget.
@@ -81,7 +81,9 @@ autorun(() {
 });
 ```
 
-The values in the observable locator behave like `Computed` objects. 
+The values in the observable locator behave like `Computed` objects. That means
+they're lazily created. Additionally, if a value isn't being observed inside
+a reaction, it may get disposed / recreated if you read it again.
 
 ### Async values
 
@@ -121,15 +123,16 @@ final user = locator.observe<User>();
 
 ### Error handling
 
-For future and stream valuse, if the `pendingValue` is `null` but the value's 
-type is a non-null, then calling `observe()` will throw if the underlying 
-stream / future hasn't emitted a value yet.
+For future and stream values, an optional `pendingValue` can be provided. If
+`pendingValue` is `null` (the default) but the value's type is a non-null, 
+then calling `observe()` will throw if the underlying stream / future hasn't 
+emitted a value yet.
 
 Additionally, if any errors are throws in the binder callback function for a 
 type `T`, then that error is bubbled up and calling `observe<T>()` will also 
 throw with the same error.
 
-If throwing is undesired, use the `tryObserve<T>()` function which will return 
+If throwing is undesired, use the `tryObserve<T>()` function, which will return 
 `null` instead of throwing.
 
 ### Putting it all together
@@ -160,10 +163,10 @@ final locator = ObservableLocator([
 
 When you call `locator.observe<Database>()`, it will throw because its
 dependencies aren't available yet. However, if you observe the `Database` 
-from inside a reaction, it will also throw, but the reaction will rerun
-again when the `Database` is actually ready.
+from *inside a reaction*, it will also throw at first, but the reaction will
+*rerun again* when the `Database` is actually ready.
 
-In practice it will look like this:
+In practice it could look like this:
 
 ```dart
 // Prints 'Database is still loading' once, while the underlying 
@@ -183,7 +186,7 @@ Under the hood, the locator will try to create an an `SqlDatabase` with
 the following steps:
 - The first dependency, an `int`, will return `3` successfully.
 - When `locator.observe<Directory>()` is called, the function throws because
-the directory future has no value yet. This causes the original 
+the `Directory` future has no value yet. This causes the original 
 `locator.observe<Database>()` call to throw.
 - However, when the future for the `Directory` dependency finally completes,
 the `Database` callback is rerun again. This time, the `int` and `Directory`
@@ -235,6 +238,6 @@ return Observer(
 );
 ```
 
-This way, calling `observe` on your async dependencies will always be
+This way, calling `observe()` on your async dependencies will always be
 safe. Any async values that aren't crucial to your app's startup can
-still be retrievd using `tryObserve()`.
+still be retrieved using `tryObserve()`.
