@@ -186,7 +186,7 @@ Under the hood, the locator will try to create an an `SqlDatabase` with
 the following steps:
 - The first dependency, an `int`, will return `3` successfully.
 - When `locator.observe<Directory>()` is called, the function throws because
-the directory future has no value yet. This causes the original 
+the `Directory` future has no value yet. This causes the original 
 `locator.observe<Database>()` call to throw.
 - However, when the future for the `Directory` dependency finally completes,
 the `Database` callback is rerun again. This time, the `int` and `Directory`
