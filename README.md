@@ -6,7 +6,7 @@ the API and create reactive dependencies.
 `Observable Locator` implements a service locator pattern for performing
 dependency injection, similar to [get_it](https://pub.dev/packages/get_it) 
 or [provider](https://pub.dev/packages/provider). However, like `provider`,
-this package can be used to create dependencies that are reactive, using
+this package can be used to create dependencies that are *reactive*, using
 MobX as the underlying system for reactivity. The API also makes it easy 
 to create `async` dependencies (on futures & streams) with minimal boilerplate.
 
@@ -39,7 +39,7 @@ final age = locator.observe<int>();
 ```
 
 So far, things are similar to `get_it`. The key difference is that the
-values inside the locator can change over time, and that values can depend
+values inside the locator can *change* over time, and that values can depend
 on other changing (i.e. *observable*) values. 
 
 Under the hood, the locator uses `MobX` to implement this
