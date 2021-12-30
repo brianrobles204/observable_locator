@@ -240,4 +240,4 @@ return Observer(
 
 This way, calling `observe` on your async dependencies will always be
 safe. Any async values that aren't crucial to your app's startup can
-still be retrievd using `tryObserve()`.
+still be retrieved using `tryObserve()`.
