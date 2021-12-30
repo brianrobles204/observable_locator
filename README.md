@@ -81,7 +81,9 @@ autorun(() {
 });
 ```
 
-The values in the observable locator behave like `Computed` objects. 
+The values in the observable locator behave like `Computed` objects. That means
+they're lazily created. Additionally, if a value isn't being observed inside
+a reaction, it may get disposed / recreated if you read it again.
 
 ### Async values
 
