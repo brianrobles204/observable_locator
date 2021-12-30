@@ -42,8 +42,8 @@ So far, things are similar to `get_it`. The key difference is that the
 values inside the locator can *change* over time, and that values can depend
 on other changing (i.e. *observable*) values. 
 
-Under the hood, the locator uses `MobX` to implement this
-reactivity. If you're unfamiliar with MobX, I suggest you read the 
+Under the hood, the locator uses MobX to implement this
+reactivity. If you're unfamiliar with the library, I suggest you read the 
 [MobX documentation](https://mobx.netlify.app/). In a nutshell, MobX has
 a concept of `observable` values and `reactions` with callback functions. 
 When an observable value changes, any reactions that use the observable 
