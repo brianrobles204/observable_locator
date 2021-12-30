@@ -132,7 +132,7 @@ Additionally, if any errors are throws in the binder callback function for a
 type `T`, then that error is bubbled up and calling `observe<T>()` will also 
 throw with the same error.
 
-If throwing is undesired, use the `tryObserve<T>()` function which will return 
+If throwing is undesired, use the `tryObserve<T>()` function, which will return 
 `null` instead of throwing.
 
 ### Putting it all together
