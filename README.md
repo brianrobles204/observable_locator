@@ -163,10 +163,10 @@ final locator = ObservableLocator([
 
 When you call `locator.observe<Database>()`, it will throw because its
 dependencies aren't available yet. However, if you observe the `Database` 
-from inside a reaction, it will also throw, but the reaction will rerun
-again when the `Database` is actually ready.
+from *inside a reaction*, it will also throw at first, but the reaction will
+*rerun again* when the `Database` is actually ready.
 
-In practice it will look like this:
+In practice it could look like this:
 
 ```dart
 // Prints 'Database is still loading' once, while the underlying 
