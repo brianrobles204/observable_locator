@@ -45,7 +45,7 @@ on other changing (i.e. *observable*) values.
 Under the hood, the locator uses MobX to implement this
 reactivity. If you're unfamiliar with the library, I suggest you read the 
 [MobX documentation](https://mobx.netlify.app/). In a nutshell, MobX has
-a concept of `observable` values and `reactions` with callback functions. 
+a concept of `observable` values, and `reactions` with callback functions. 
 When an observable value changes, any reactions that use the observable 
 value are rerun. These reactions can have various side effects, from 
 recomputing another value to rebuilding a Widget.
